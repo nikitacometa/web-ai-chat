@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     ALGOD_TOKEN: str = ""
     HOT_WALLET_MNEMONIC: str = ""
     OPENAI_API_KEY: str = ""
-    SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
+    SUPABASE_URL: str = "https://itpzxmkjaqnahoqtzcml.supabase.co"
+    SUPABASE_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0cHp4bWtqYXFuYWhvcXR6Y21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDczMzYwNTYsImV4cCI6MjA2MjkxMjA1Nn0.hwwOmCJFlPICU7SPcoeQO2ZOo09P7cAZa7iulFqJIek"
     ADMIN_TOKEN: str = "verysecretadmintoken"
 
     ROUND_INACTIVITY_TIMEOUT_SEC: int = 1200  # 20 minutes

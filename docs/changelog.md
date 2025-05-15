@@ -58,6 +58,9 @@ but adapted for our needs. Each entry contains:
   - Uses a placeholder for `walletAddress` pending wallet integration.
 - Added and exported an `ArenaFallback` component within `components/Arena.tsx` (and removed `ArenaExample`) to be used by `app/page.tsx`.
 
+### Changed
+- Updated `.env.example` to include only AlgoFOMO-specific environment variables (Supabase, OpenAI, Algorand, Admin, API URL) and removed Vercel template content.
+
 ## 2023-09-22
 
 ### Backend

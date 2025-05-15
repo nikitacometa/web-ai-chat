@@ -1,16 +1,18 @@
 import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { ConnectWalletButton } from '@/components/ConnectWalletButton';
 // import { ThemeProvider } from '@/components/theme-provider'; // Removed, will add back if/when needed
 
 import './globals.css';
 // SessionProvider is likely not needed as we removed next-auth
-// import { SessionProvider } from 'next-auth/react'; 
+// import { SessionProvider } from 'next-auth/react';
 
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000'), // Placeholder, update when domain is known
   title: 'AlgoFOMO - Algorand Avatar Battles',
-  description: 'Bet ALGO, cast spells, and watch Twitter avatars battle for momentum in AlgoFOMO!',
+  description:
+    'Bet ALGO, cast spells, and watch Twitter avatars battle for momentum in AlgoFOMO!',
 };
 
 export const viewport = {
@@ -73,7 +75,21 @@ export default async function RootLayout({
         />
       </head>
       <body className="antialiased">
-        {/* <ThemeProvider> removed, children directly rendered */}
+        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
+            <div className="mr-4 hidden md:flex">
+              {/* Placeholder for Logo/Brand */}
+              <a className="mr-6 flex items-center space-x-2" href="/">
+                <span className="hidden font-bold sm:inline-block">
+                  AlgoFOMO
+                </span>
+              </a>
+            </div>
+            <div className="flex items-center space-x-2">
+              <ConnectWalletButton />
+            </div>
+          </div>
+        </header>
         <Toaster position="top-center" />
         {/* SessionProvider removed, children directly rendered */}
         {children}
