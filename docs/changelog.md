@@ -11,7 +11,16 @@ but adapted for our needs. Each entry contains:
 
 ## Unreleased
 
-### YYYY-MM-DD (Replace with today's date)
+### 2024-07-26
+
+#### Feature - Basic Supabase Round Integration (Backend)
+- **Backend**: Initialized Supabase client in `backend/services/supabase_service.py`.
+- **Backend**: Implemented `create_round_in_db` function in `supabase_service.py` to insert new rounds into the 'rounds' table, calculating start time and deadlines.
+- **Backend**: Implemented `deactivate_all_active_rounds_in_db` function in `supabase_service.py` to mark existing active rounds as inactive before creating a new one.
+- **Backend**: Implemented `get_active_round_from_db` function in `supabase_service.py` to fetch the current active round.
+- **Backend**: Updated `/admin/reset` route in `backend/routes/admin.py` to use `deactivate_all_active_rounds_in_db` and `create_round_in_db`. Unused `os` import removed.
+- **Backend**: Updated `GET /state` route in `backend/routes/state.py` to use `get_active_round_from_db`. Returns 404 if no active round is found. `GameState` model populated with the active round and placeholder/empty bet information.
+- **Database Schema Note**: Assumes `rounds` table in Supabase with fields like `id`, `left_avatar_url`, `right_avatar_url`, `momentum`, `pot_amount`, `start_time`, `current_deadline`, `max_deadline`, `active`, `ended_at`, `winner`, `battle_image_url`.
 
 #### Change - Admin & Avatar Handling
 - **Backend**: Modified `/admin/reset` endpoint and `AdminResetRequest` model to accept direct avatar image URLs (`left_avatar_url`, `right_avatar_url`) and an optional `initial_momentum` instead of Twitter handles. Placeholder names ("Left Player", "Right Player") are now used for `handle` and `display_name` in the `TwitterUser` model for participants.

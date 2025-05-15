@@ -1,68 +1,67 @@
 # POST /admin/reset endpoint
-from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timedelta
-from typing import Dict, Any
-from ..models import AdminResetRequest, Round, TwitterUser
-import os
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, Optional
+from ..models import AdminResetRequest, Round as RoundResponseModel
+from ..services.supabase_service import create_round_in_db, deactivate_all_active_rounds_in_db
+from ..config import settings
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # This should be properly secured in production
 def verify_admin_token(token: str) -> bool:
-    expected_token = os.environ.get("ADMIN_API_TOKEN", "test_admin_token")
-    return token == expected_token
+    if not settings.ADMIN_TOKEN:
+        logger.error("ADMIN_TOKEN is not configured in settings.")
+        return False
+    return token == settings.ADMIN_TOKEN
 
 @router.post("/reset", response_model=Dict[str, Any])
 async def reset_game(request: AdminResetRequest):
     """
-    Start a new game round with specified Twitter handles
+    Deactivates any existing active round and starts a new game round,
+    storing it in the database.
     """
+    logger.info(f"Admin reset request received: {request.model_dump(exclude={'admin_token'})}")
     try:
         # Verify admin token
         if not verify_admin_token(request.admin_token):
+            logger.warning("Invalid admin token attempt.")
             raise HTTPException(status_code=401, detail="Invalid admin token")
-            
-        # In a real implementation, this would:
-        # 1. Fetch Twitter profile data for the handles
-        # 2. Create a new round in the database
-        # 3. Generate an initial battle image
         
-        # For demo purposes, we'll create a mock response
-        # Avatar URLs are now provided directly in the request
-        
-        current_time = datetime.now()
-        # Read from environment or use defaults for timeouts
-        inactivity_timeout_minutes = int(os.environ.get("ROUND_INACTIVITY_TIMEOUT_MINUTES", "20"))
-        max_duration_hours = int(os.environ.get("MAX_ROUND_DURATION_HOURS", "24"))
+        # Deactivate all other active rounds first
+        logger.info("Attempting to deactivate existing active rounds.")
+        deactivated_ok = await deactivate_all_active_rounds_in_db()
+        if not deactivated_ok:
+            logger.error("Failed to deactivate existing active rounds. This might lead to multiple active rounds.")
+            # Depending on policy, we could raise an error here:
+            # raise HTTPException(status_code=500, detail="Failed to deactivate existing rounds before creating new one.")
+        else:
+            logger.info("Successfully deactivated existing active rounds (or no active rounds found).")
 
-        initial_deadline = current_time + timedelta(minutes=inactivity_timeout_minutes)
-        max_deadline = current_time + timedelta(hours=max_duration_hours)
-        
-        new_round = Round(
-            id=1,  # Would be auto-generated in DB
-            left_user=TwitterUser(
-                handle="Left Player", # Or derive from URL if desired
-                avatar_url=request.left_avatar_url,
-                display_name="Left Player" # Or derive from URL
-            ),
-            right_user=TwitterUser(
-                handle="Right Player", # Or derive from URL
-                avatar_url=request.right_avatar_url,
-                display_name="Right Player" # Or derive from URL
-            ),
-            momentum=request.initial_momentum,
-            pot_amount=0.0,
-            start_time=current_time,
-            current_deadline=initial_deadline,
-            max_deadline=max_deadline,
-            battle_image_url=None  # Would be generated
+        # Create the new round in the database
+        logger.info(f"Attempting to create new round with L: {request.left_avatar_url}, R: {request.right_avatar_url}, M: {request.initial_momentum}")
+        created_round: Optional[RoundResponseModel] = await create_round_in_db(
+            left_avatar_url=request.left_avatar_url,
+            right_avatar_url=request.right_avatar_url,
+            initial_momentum=request.initial_momentum
         )
         
+        if not created_round:
+            logger.error("Database service failed to create new round.")
+            raise HTTPException(status_code=500, detail="Failed to create new round in database.")
+        
+        logger.info(f"New round created successfully: ID {created_round.id}")
         return {
             "success": True,
-            "round": new_round,
+            "round": created_round.model_dump(), # Use Pydantic model's dict representation
             "message": "New round started successfully!"
         }
+    except HTTPException as http_exc: # Re-raise HTTPExceptions directly
+        logger.debug(f"HTTPException in reset_game: {http_exc.detail}")
+        raise http_exc
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start new round: {str(e)}")
+        logger.error(f"Unexpected error in reset_game: {str(e)}", exc_info=True)
+        # Ensure a generic message for unexpected errors
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while starting the new round.")
 
