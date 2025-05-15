@@ -4,6 +4,7 @@
 from supabase import create_client, Client
 from ..config import settings
 from ..models import Round as RoundModel, TwitterUser, Bet as BetModel, BetRequest # Modified import
+from ..utils.game_logic import calculate_bet_impact # Import the new function
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Literal # Added Literal
 import logging
@@ -151,9 +152,14 @@ async def deactivate_all_active_rounds_in_db() -> bool:
 async def create_bet_in_db(bet_input: BetRequest, round_id: int) -> Optional[BetModel]:
     """
     Creates a new bet in the Supabase 'bets' table.
+    Calculates bet impact and includes it in the stored data.
     Returns the created bet data as a Pydantic model, or None on failure.
     """
     now = datetime.now(timezone.utc)
+    
+    # Calculate impact before creating the record
+    impact_value = calculate_bet_impact(amount=bet_input.amount, spell=bet_input.spell)
+    
     bet_data_to_insert = {
         "round_id": round_id,
         "wallet_address": bet_input.wallet_address,
@@ -162,6 +168,7 @@ async def create_bet_in_db(bet_input: BetRequest, round_id: int) -> Optional[Bet
         "spell": bet_input.spell,
         "timestamp": now.isoformat(),
         "processed": False, # Default, might be updated later if tx_id verification happens
+        "impact": impact_value, # Add the calculated impact
         # tx_id is not included here, assuming it's added if/when Algorand tx is verified
     }
 
@@ -183,6 +190,7 @@ async def create_bet_in_db(bet_input: BetRequest, round_id: int) -> Optional[Bet
                 spell=created_db_bet["spell"],
                 timestamp=datetime.fromisoformat(created_db_bet["timestamp"].replace('Z', '+00:00')),
                 processed=created_db_bet["processed"],
+                impact=created_db_bet.get("impact"), # Ensure impact is retrieved
                 tx_id=created_db_bet.get("tx_id") # tx_id might not be there initially
             )
         else:
@@ -314,6 +322,7 @@ async def get_bets_for_round_db(round_id: int, limit: Optional[int] = 10, offset
                     spell=bet["spell"],
                     timestamp=datetime.fromisoformat(bet["timestamp"].replace('Z', '+00:00')),
                     processed=bet["processed"],
+                    impact=bet.get("impact"),
                     tx_id=bet.get("tx_id")
                 )
                 for bet in bets_data
@@ -327,6 +336,50 @@ async def get_bets_for_round_db(round_id: int, limit: Optional[int] = 10, offset
     except Exception as e:
         logger.error(f"Exception fetching bets for round {round_id}: {e}", exc_info=True)
         return []
+
+async def end_round_in_db(round_id: int, winner_side: Optional[Literal["left", "right", "draw"]] = None, end_reason: str = "unknown") -> Optional[RoundModel]:
+    """
+    Ends a round by setting active=False, ended_at=now, and recording the winner.
+    Returns the updated round data, or None on failure.
+    """
+    now = datetime.now(timezone.utc)
+    update_payload = {
+        "active": False,
+        "ended_at": now.isoformat(),
+        "winner": winner_side, # Can be 'left', 'right', or 'draw' (or None if still undetermined)
+        # We could add an 'end_reason' field to the table if desired
+    }
+    try:
+        logger.info(f"Ending round {round_id}. Winner: {winner_side if winner_side else 'undetermined'}. Reason: {end_reason}. Payload: {update_payload}")
+        response = supabase.table("rounds").update(update_payload).eq("id", round_id).execute()
+        logger.debug(f"Supabase end_round response: {response}")
+
+        if response.data and len(response.data) > 0:
+            ended_db_round = response.data[0]
+            # Reconstruct and return the full RoundModel
+            left_user = TwitterUser(handle="Left Player", avatar_url=ended_db_round["left_avatar_url"], display_name="Left Player")
+            right_user = TwitterUser(handle="Right Player", avatar_url=ended_db_round["right_avatar_url"], display_name="Right Player")
+
+            return RoundModel(
+                id=ended_db_round["id"],
+                left_user=left_user,
+                right_user=right_user,
+                momentum=ended_db_round["momentum"],
+                pot_amount=float(ended_db_round["pot_amount"]),
+                start_time=datetime.fromisoformat(ended_db_round["start_time"].replace('Z', '+00:00')),
+                current_deadline=datetime.fromisoformat(ended_db_round["current_deadline"].replace('Z', '+00:00')),
+                max_deadline=datetime.fromisoformat(ended_db_round["max_deadline"].replace('Z', '+00:00')),
+                active=ended_db_round["active"],
+                winner=ended_db_round.get("winner"), # Use .get() for safety
+                battle_image_url=ended_db_round.get("battle_image_url")
+            )
+        else:
+            actual_error = getattr(response, 'error', None)
+            logger.error(f"Failed to end round {round_id} or no data returned. Error: {actual_error}")
+            return None
+    except Exception as e:
+        logger.error(f"Exception ending round {round_id}: {e}", exc_info=True)
+        return None
 
 # Placeholder for fetching bets for a round
 # async def get_bets_for_round_from_db(round_id: int, limit: int = 10) -> List[BetModel]:

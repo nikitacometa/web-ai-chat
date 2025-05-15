@@ -59,6 +59,7 @@ class Bet(BetRequest):
     timestamp: datetime
     processed: bool = False
     tx_id: Optional[str] = None
+    impact: Optional[float] = None
 
 class AdminResetRequest(BaseModel):
     left_avatar_url: str

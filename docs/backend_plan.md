@@ -289,10 +289,17 @@ class AdminResetRequest(BaseModel):
 
 ### Impact Calculation (remains the same)
 
-### Momentum Update (remains the same)
-
 ### Winner Calculation
 (Logic for determining winning side based on momentum if edge hit, or closest to edge on timeout, remains valid. Timeout now covers inactivity, or max duration.)
+
+### Impact Calculation (New Section based on PRD)
+- Impact is calculated for each bet and stored in the `bets` table.
+- Formula (from PRD): `impact = min( log10(bet_amount) * prompt_power * random_factor, 10.0 )`
+  - `log10(bet_amount)`: `bet_amount` is clamped to be `>= 1.0` for this term to ensure a non-negative result from `log10`.
+  - `prompt_power`: Calculated as `(number_of_words_in_spell / 10.0)`, then clamped between `0.5` and `1.5`.
+  - `random_factor`: A random float between `0.8` and `1.2`.
+  - The final result is also clamped to be non-negative, `max(0.0, calculated_value)`.
+- This logic is implemented in `backend/utils/game_logic.py:calculate_bet_impact()`.
 
 ## File Structure (Managed with Pipenv)
 
@@ -319,7 +326,8 @@ backend/
 ├── utils/
 │   ├── auth.py             # Authentication utilities (e.g., for admin token)
 │   ├── validation.py       # General validation helpers (if any beyond Pydantic)
-│   └── helpers.py          # Misc helper functions
+│   ├── helpers.py          # Misc helper functions
+│   └── game_logic.py       # NEW: Bet impact calculation and other game-specific logic
 ├── config.py               # Configuration and environment variables loader
 ```
 
