@@ -52,8 +52,7 @@ export interface BetRequest {
 
 export interface BetResponse {
   success: boolean;
-  bet?: Bet;
-  new_momentum?: number;
-  new_deadline?: string; // ISO datetime string
   message: string;
+  bet?: Bet;
+  updated_round_state?: GameRound | null;
 }

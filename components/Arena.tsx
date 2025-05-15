@@ -86,22 +86,32 @@ export function Arena({
   );
 }
 
-export default function ArenaExample() {
+// New ArenaFallback component
+export function ArenaFallback({ message }: { message?: string }) {
   return (
-    <Arena
-      leftAvatar={{
-        src: "https://pbs.twimg.com/profile_images/1683325380441128960/yRsRRjGO_400x400.jpg",
-        alt: "Elon Musk",
-        fallback: "EM",
-      }}
-      rightAvatar={{
-        src: "https://pbs.twimg.com/profile_images/1590968738358079488/IY9Gx6Ok_400x400.jpg",
-        alt: "SBF",
-        fallback: "SBF",
-      }}
-      momentum={65}
-      potAmount="12,345.67 ALGO"
-      endTime={new Date(Date.now() + 3600000)} // 1 hour from now
-    />
+    <div className="w-full max-w-2xl mx-auto">
+      <div className="bg-background border border-border rounded-xl p-6 shadow-sm animate-pulse">
+        <div className="flex items-center justify-between mb-6">
+          <div className="h-6 bg-muted rounded w-1/3"></div> {/* Pot Amount Placeholder */}
+          <div className="h-6 bg-muted rounded w-1/4"></div> {/* Timer Placeholder */}
+        </div>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col items-center">
+            <div className="h-16 w-16 bg-muted rounded-full mb-2"></div> {/* Avatar Placeholder */}
+            <div className="h-4 bg-muted rounded w-20"></div> {/* Name Placeholder */}
+          </div>
+          <div className="flex-1 mx-4 h-4 bg-muted rounded"></div> {/* Momentum Bar Placeholder */}
+          <div className="flex flex-col items-center">
+            <div className="h-16 w-16 bg-muted rounded-full mb-2"></div> {/* Avatar Placeholder */}
+            <div className="h-4 bg-muted rounded w-20"></div> {/* Name Placeholder */}
+          </div>
+        </div>
+        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+          <p className="text-muted-foreground text-sm">
+            {message || "Loading game arena..."}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 } 

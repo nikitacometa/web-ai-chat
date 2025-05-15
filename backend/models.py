@@ -75,3 +75,9 @@ class GameState(BaseModel):
     total_bets_count: int = 0
     left_side_bets_amount: float = 0.0
     right_side_bets_amount: float = 0.0 
+
+class BetResponse(BaseModel):
+    success: bool
+    message: str
+    bet: Optional[Bet] = None
+    updated_round_state: Optional[Round] = None 

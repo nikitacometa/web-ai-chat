@@ -3,57 +3,90 @@
 import * as React from "react";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Sword, Coins, Rocket, Bolt } from "lucide-react";
+import { Sword, Coins, Rocket, Bolt, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { BetRequest } from "@/lib/types";
 
 interface BetDrawerProps {
+  roundId: number;
+  walletAddress: string;
   leftSideLabel: string;
   rightSideLabel: string;
   minimumBet: number;
-  onPlaceBet?: (side: string, spell: string) => void;
+  onPlaceBet?: (betData: BetRequest) => Promise<void>;
   className?: string;
 }
 
 export function BetDrawer({
+  roundId,
+  walletAddress,
   leftSideLabel,
   rightSideLabel,
   minimumBet,
   onPlaceBet,
   className = "",
 }: BetDrawerProps) {
-  const [selectedSide, setSelectedSide] = useState<string>("");
+  const [selectedSide, setSelectedSide] = useState<"left" | "right" | "">("");
   const [spellText, setSpellText] = useState<string>("");
+  const [betAmount, setBetAmount] = useState<string>(minimumBet.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [wordCount, setWordCount] = useState(0);
+  const [feedbackMessage, setFeedbackMessage] = useState<{type: "success" | "error", message: string} | null>(null);
 
   const handleSpellChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setSpellText(text);
-    // Count words (split by spaces and filter out empty strings)
     const words = text.trim().split(/\s+/).filter(word => word.length > 0);
     setWordCount(words.length);
   };
 
-  const handleSubmit = () => {
-    if (!selectedSide || !spellText.trim() || isSubmitting) return;
-    
-    setIsSubmitting(true);
-    
-    // Simulate transaction processing
-    setTimeout(() => {
-      onPlaceBet?.(selectedSide, spellText.trim());
-      setIsSubmitting(false);
-      // Optional: Reset form
-      // setSelectedSide("");
-      // setSpellText("");
-    }, 1500);
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (/^\d*\.?\d*$/.test(value)) {
+      setBetAmount(value);
+    }
   };
 
-  // Word count indicator color
+  const handleSubmit = async () => {
+    if (!selectedSide || !spellText.trim() || isSubmitting || !betAmount) return;
+    
+    const amountNumber = parseFloat(betAmount);
+    if (isNaN(amountNumber) || amountNumber < minimumBet) {
+      setFeedbackMessage({type: "error", message: `Amount must be at least ${minimumBet}.`});
+      return;
+    }
+    if (wordCount > 10) {
+      setFeedbackMessage({type: "error", message: "Spell exceeds 10 words."});
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFeedbackMessage(null);
+
+    const betData: BetRequest = {
+      round_id: roundId,
+      side: selectedSide,
+      amount: amountNumber,
+      spell: spellText.trim(),
+      wallet_address: walletAddress,
+    };
+
+    try {
+      await onPlaceBet?.(betData);
+      setFeedbackMessage({type: "success", message: "Bet placed successfully!"});
+    } catch (error) {
+      console.error("Error placing bet:", error);
+      setFeedbackMessage({type: "error", message: error instanceof Error ? error.message : "Failed to place bet."});
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getWordCountColor = () => {
     if (wordCount > 10) return "text-red-500";
     if (wordCount >= 7) return "text-amber-500";
@@ -73,12 +106,11 @@ export function BetDrawer({
       </CardHeader>
       
       <CardContent className="pt-6 space-y-4">
-        {/* Side Selection */}
         <div className="space-y-2">
           <Label>Choose Your Champion</Label>
           <RadioGroup 
             value={selectedSide} 
-            onValueChange={setSelectedSide}
+            onValueChange={(value) => setSelectedSide(value as "left" | "right")}
             className="flex flex-col sm:flex-row gap-2"
           >
             <div className="flex-1">
@@ -115,7 +147,19 @@ export function BetDrawer({
           </RadioGroup>
         </div>
         
-        {/* Spell Entry */}
+        <div className="space-y-2">
+          <Label htmlFor="betAmount">Bet Amount (Min: {minimumBet} ALGO)</Label>
+          <Input 
+            id="betAmount"
+            type="text"
+            inputMode="decimal"
+            value={betAmount}
+            onChange={handleAmountChange}
+            placeholder={`e.g., ${minimumBet}`}
+            className="bg-background/50 border-muted focus-visible:border-purple-500/50 focus-visible:ring-purple-500/20"
+          />
+        </div>
+        
         <div className="space-y-2">
           <div className="flex justify-between">
             <Label htmlFor="spell">Cast Your Spell (10 words max)</Label>
@@ -139,22 +183,18 @@ export function BetDrawer({
           </div>
         </div>
         
-        {/* Minimum Bet Information */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Coins className="h-5 w-5 text-amber-500" />
-            <span className="text-sm font-medium">Minimum Bet:</span>
+        {feedbackMessage && (
+          <div className={`flex items-center gap-2 p-3 rounded-md text-sm ${feedbackMessage.type === 'success' ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700'}`}>
+            {feedbackMessage.type === 'success' ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+            <p>{feedbackMessage.message}</p>
           </div>
-          <div className="font-mono font-bold text-right">
-            {minimumBet.toFixed(2)} <span className="text-xs font-normal">ALGO</span>
-          </div>
-        </div>
+        )}
       </CardContent>
       
       <CardFooter className="flex justify-center pb-6 pt-2">
         <Button 
           onClick={handleSubmit}
-          disabled={!selectedSide || !spellText.trim() || wordCount > 10 || isSubmitting}
+          disabled={!selectedSide || !spellText.trim() || wordCount > 10 || isSubmitting || !betAmount || parseFloat(betAmount) < minimumBet}
           className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-2 shadow-lg transition-all duration-200 hover:shadow-purple-500/20"
           size="lg"
         >
@@ -175,15 +215,5 @@ export function BetDrawer({
         </Button>
       </CardFooter>
     </Card>
-  );
-}
-
-export default function BetDrawerExample() {
-  return (
-    <BetDrawer
-      leftSideLabel="Elon Musk"
-      rightSideLabel="SBF"
-      minimumBet={0.1}
-    />
   );
 } 

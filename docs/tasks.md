@@ -14,25 +14,25 @@ This document tracks planned tasks for the AlgoFOMO project.
 ### Task 1.1: Backend - Bet Persistence & Logic
 - `[ ]` Define/Confirm `bets` table schema in Supabase (as per `development_plan.md`).
   - Columns: `id` (PK), `round_id` (FK to `rounds`), `wallet_address` (bettor), `side` ('L' or 'R'), `amount` (numeric), `spell` (text), `timestamp` (timestamptz), `tx_id` (text, for Algorand tx, optional for now), `processed` (boolean).
-- `[ ]` Implement `create_bet_in_db(bet_data)` in `backend/services/supabase_service.py`.
-  - `[ ]` Store bet details as per schema.
-- `[ ]` Implement `update_round_after_bet_in_db(round_id, bet_amount, bet_side)` in `supabase_service.py`.
-  - `[ ]` Increment the round's `pot_amount`.
-  - `[ ]` Calculate and apply momentum change based on `bet_amount` and `bet_side` (define this logic).
-  - `[ ]` Calculate and update the round's `current_deadline` (extended by `BET_TIME_EXTENSION_SEC`, capped by `max_deadline`).
-- `[ ]` Implement `get_bets_for_round_db(round_id, limit, offset)` in `supabase_service.py`.
-- `[ ]` Refactor `POST /bet` endpoint (`backend/routes/bet.py`):
-  - `[ ]` Validate request using `BetRequest` model.
+- `[~]` Implement `create_bet_in_db(bet_data)` in `backend/services/supabase_service.py`.
+  - `[~]` Store bet details as per schema.
+- `[~]` Implement `update_round_after_bet_in_db(round_id, bet_amount, bet_side)` in `supabase_service.py`.
+  - `[~]` Increment the round's `pot_amount`.
+  - `[~]` Calculate and apply momentum change based on `bet_amount` and `bet_side` (define this logic). (Initial simple logic implemented)
+  - `[~]` Calculate and update the round's `current_deadline` (extended by `BET_TIME_EXTENSION_SEC`, capped by `max_deadline`).
+- `[x]` Implement `get_bets_for_round_db(round_id, limit, offset)` in `supabase_service.py`.
+- `[x]` Refactor `POST /bet` endpoint (`backend/routes/bet.py`):
+  - `[x]` Validate request using `BetRequest` model (Pydantic handles this, plus active round check).
   - `[ ]` (HOOK for Future ALGO TX VERIFICATION) For now, assume bet is valid if API is called.
-  - `[ ]` Call `create_bet_in_db`.
-  - `[ ]` Call `update_round_after_bet_in_db`.
-  - `[ ]` Return success/failure and details of the created bet and updated round state.
+  - `[x]` Call `create_bet_in_db`.
+  - `[x]` Call `update_round_after_bet_in_db`.
+  - `[x]` Return success/failure and details of the created bet and updated round state (using `BetResponse`).
 
 ### Task 1.2: Backend - Enhance `/state` Endpoint with Bets
-- `[ ]` Modify `get_active_round_from_db` (or a wrapper in `supabase_service.py`) to also fetch recent bets (e.g., last 10) for the active round using `get_bets_for_round_db`.
-- `[ ]` Update `GET /state` route (`backend/routes/state.py`):
-  - `[ ]` Populate `recent_bets` in the `GameState` model.
-  - `[ ]` Calculate and include `total_bets_count`, `left_side_bets_amount`, `right_side_bets_amount` in `GameState` based on all bets for the current round.
+- `[x]` Modify `get_active_round_from_db` (or a wrapper in `supabase_service.py`) to also fetch recent bets (e.g., last 10) for the active round using `get_bets_for_round_db`. (Achieved by modifying `get_bets_for_round_db` to fetch all and processing in `/state` route).
+- `[x]` Update `GET /state` route (`backend/routes/state.py`):
+  - `[x]` Populate `recent_bets` in the `GameState` model.
+  - `[x]` Calculate and include `total_bets_count`, `left_side_bets_amount`, `right_side_bets_amount` in `GameState` based on all bets for the current round.
 
 ### Task 1.3: Frontend - Bet Submission & Display
 - `[ ]` Add "Amount" input field to `BetDrawer.tsx` component (or confirm how bet amount is determined).

@@ -30,6 +30,34 @@ but adapted for our needs. Each entry contains:
 - **Documentation**: Updated `README.md`, `docs/development_plan.md`, and `docs/backend_plan.md` to reflect the new avatar handling mechanism and API changes.
 - **Database Schema Note**: The `rounds` table in Supabase needs to be updated. The columns `left_handle` (text) and `right_handle` (text) should be changed to `left_avatar_url` (text) and `right_avatar_url` (text) respectively to align with these changes. (This is a manual database migration or requires a separate script).
 
+### Added
+- Implemented `create_bet_in_db` function in `backend/services/supabase_service.py` to persist new bets to the Supabase `bets` table.
+- Implemented `update_round_after_bet_in_db` function in `backend/services/supabase_service.py` to:
+  - Increment round's `pot_amount`.
+  - Update round's `momentum` based on bet side and amount (initial simple logic: `(bet_amount / 100.0) * 0.1` shift, clamped 0-100).
+  - Extend round's `current_deadline` by `BET_TIME_EXTENSION_SEC` (60s), respecting `max_deadline`.
+- Modified `get_bets_for_round_db` in `backend/services/supabase_service.py` to support fetching all bets for a round (when `limit=None`) and corrected its `execute()` call to be awaited.
+- Enhanced `GET /state` endpoint in `backend/routes/state.py` to:
+  - Fetch all bets for the active round using `get_bets_for_round_db`.
+  - Populate `GameState.recent_bets` with the latest (e.g., 10) bets.
+  - Calculate and populate `GameState.total_bets_count`, `GameState.left_side_bets_amount`, and `GameState.right_side_bets_amount` based on all bets for the round.
+- Added `BetResponse` Pydantic model to `backend/models.py`.
+- Updated the `BetResponse` interface in `lib/types.ts` to align with the backend, replacing `new_momentum` and `new_deadline` with `updated_round_state: GameRound | null`.
+- Refactored `components/BetDrawer.tsx`:
+  - Added `roundId` and `walletAddress` to props.
+  - Changed `onPlaceBet` prop to accept a `BetRequest` object and return a `Promise`.
+  - Added an `Input` field for the bet `amount` with validation.
+  - Updated `handleSubmit` to construct `BetRequest` and call `onPlaceBet`.
+  - Implemented basic success/error feedback messages within the component.
+- Removed `BetDrawerExample` default export from `components/BetDrawer.tsx`.
+- Refactored `app/page.tsx` for bet submission functionality:
+  - Introduced `BettingInterfaceClientWrapper`, a new client component, to handle bet interactions.
+  - The main `AlgoFOMOPage` server component fetches initial game state and passes it to `BettingInterfaceClientWrapper`.
+  - `BettingInterfaceClientWrapper` manages its local `gameState` and provides the `onPlaceBet` handler to `BetDrawer`.
+  - The `onPlaceBet` handler now calls the `placeBet` API and updates the local `gameState.round` with the API response for UI reactivity.
+  - Uses a placeholder for `walletAddress` pending wallet integration.
+- Added and exported an `ArenaFallback` component within `components/Arena.tsx` (and removed `ArenaExample`) to be used by `app/page.tsx`.
+
 ## 2023-09-22
 
 ### Backend
