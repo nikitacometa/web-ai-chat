@@ -19,6 +19,32 @@ if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
     
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
+def _map_db_round_to_pydantic(db_round_data: dict) -> RoundModel:
+    """Helper function to map a raw round dict from Supabase to a RoundModel."""
+    left_user = TwitterUser(
+        handle="Left Player", 
+        avatar_url=db_round_data["left_avatar_url"], 
+        display_name="Left Player"
+    )
+    right_user = TwitterUser(
+        handle="Right Player", 
+        avatar_url=db_round_data["right_avatar_url"], 
+        display_name="Right Player"
+    )
+    return RoundModel(
+        id=db_round_data["id"],
+        left_user=left_user,
+        right_user=right_user,
+        momentum=db_round_data["momentum"],
+        pot_amount=float(db_round_data["pot_amount"]),
+        start_time=datetime.fromisoformat(db_round_data["start_time"].replace('Z', '+00:00')),
+        current_deadline=datetime.fromisoformat(db_round_data["current_deadline"].replace('Z', '+00:00')),
+        max_deadline=datetime.fromisoformat(db_round_data["max_deadline"].replace('Z', '+00:00')),
+        active=db_round_data["active"],
+        battle_image_url=db_round_data.get("battle_image_url"),
+        winner=db_round_data.get("winner")
+    )
+
 async def create_round_in_db(
     left_avatar_url: str, 
     right_avatar_url: str, 
@@ -55,22 +81,7 @@ async def create_round_in_db(
 
         if response.data and len(response.data) > 0:
             created_db_round = response.data[0]
-            left_user = TwitterUser(handle="Left Player", avatar_url=created_db_round["left_avatar_url"], display_name="Left Player")
-            right_user = TwitterUser(handle="Right Player", avatar_url=created_db_round["right_avatar_url"], display_name="Right Player")
-            
-            return RoundModel(
-                id=created_db_round["id"],
-                left_user=left_user,
-                right_user=right_user,
-                momentum=created_db_round["momentum"],
-                pot_amount=float(created_db_round["pot_amount"]),
-                start_time=datetime.fromisoformat(created_db_round["start_time"].replace('Z', '+00:00')),
-                current_deadline=datetime.fromisoformat(created_db_round["current_deadline"].replace('Z', '+00:00')),
-                max_deadline=datetime.fromisoformat(created_db_round["max_deadline"].replace('Z', '+00:00')),
-                active=created_db_round["active"],
-                battle_image_url=created_db_round.get("battle_image_url"),
-                winner=created_db_round.get("winner")
-            )
+            return _map_db_round_to_pydantic(created_db_round)
         else:
             actual_error = getattr(response, 'error', None)
             logger.error(f"Failed to insert round or no data returned. Error: {actual_error}. Full response: {response}")
@@ -99,22 +110,7 @@ async def get_active_round_from_db() -> Optional[RoundModel]:
         logger.debug(f"Supabase get_active_round response: {response}")
         if response.data and len(response.data) > 0:
             active_db_round = response.data[0]
-            left_user = TwitterUser(handle="Left Player", avatar_url=active_db_round["left_avatar_url"], display_name="Left Player")
-            right_user = TwitterUser(handle="Right Player", avatar_url=active_db_round["right_avatar_url"], display_name="Right Player")
-
-            return RoundModel(
-                id=active_db_round["id"],
-                left_user=left_user,
-                right_user=right_user,
-                momentum=active_db_round["momentum"],
-                pot_amount=float(active_db_round["pot_amount"]),
-                start_time=datetime.fromisoformat(active_db_round["start_time"].replace('Z', '+00:00')),
-                current_deadline=datetime.fromisoformat(active_db_round["current_deadline"].replace('Z', '+00:00')),
-                max_deadline=datetime.fromisoformat(active_db_round["max_deadline"].replace('Z', '+00:00')),
-                active=active_db_round["active"],
-                battle_image_url=active_db_round.get("battle_image_url"),
-                winner=active_db_round.get("winner")
-            )
+            return _map_db_round_to_pydantic(active_db_round)
         else:
             logger.info("No active round found.")
             return None
@@ -201,9 +197,10 @@ async def create_bet_in_db(bet_input: BetRequest, round_id: int) -> Optional[Bet
         logger.error(f"Exception creating bet in Supabase: {e}", exc_info=True)
         return None
 
-async def update_round_after_bet_in_db(round_id: int, bet_amount: float, bet_side: Literal["left", "right"]) -> Optional[RoundModel]:
+async def update_round_after_bet_in_db(round_id: int, bet_amount: float, bet_impact: float, bet_side: Literal["left", "right"]) -> Optional[RoundModel]:
     """
-    Updates the round's pot_amount, momentum, and current_deadline after a bet.
+    Updates the round's pot_amount (using bet_amount), momentum (using bet_impact), 
+    and current_deadline after a bet.
     Returns the updated round data as a Pydantic model, or None on failure.
     """
     try:
@@ -219,14 +216,14 @@ async def update_round_after_bet_in_db(round_id: int, bet_amount: float, bet_sid
         # 1. Update pot_amount
         new_pot_amount = float(current_round_data.get("pot_amount", 0.0)) + bet_amount
 
-        # 2. Update momentum
+        # 2. Update momentum using bet_impact
         current_momentum = int(current_round_data.get("momentum", 50))
-        momentum_change = (bet_amount / 100.0) * 0.1 # Small change, e.g., 100 bet = 0.1 momentum shift
+        # momentum_change = (bet_amount / 100.0) * 0.1 # OLD LOGIC - REMOVED
         
         if bet_side == "left":
-            new_momentum = current_momentum - momentum_change
+            new_momentum = current_momentum - bet_impact
         else: # bet_side == "right"
-            new_momentum = current_momentum + momentum_change
+            new_momentum = current_momentum + bet_impact
         
         # Clamp momentum between 0 and 100
         new_momentum_clamped = max(0.0, min(100.0, new_momentum))
@@ -253,25 +250,7 @@ async def update_round_after_bet_in_db(round_id: int, bet_amount: float, bet_sid
 
         if response.data and len(response.data) > 0:
             updated_db_round = response.data[0]
-            # Reconstruct RoundModel from updated_db_round
-            # Assuming left_user and right_user details are not changed by this function
-            # and might need to be fetched or passed if full RoundModel is always required
-            left_user = TwitterUser(handle="Left Player", avatar_url=updated_db_round["left_avatar_url"], display_name="Left Player")
-            right_user = TwitterUser(handle="Right Player", avatar_url=updated_db_round["right_avatar_url"], display_name="Right Player")
-
-            return RoundModel(
-                id=updated_db_round["id"],
-                left_user=left_user,
-                right_user=right_user,
-                momentum=updated_db_round["momentum"],
-                pot_amount=float(updated_db_round["pot_amount"]),
-                start_time=datetime.fromisoformat(updated_db_round["start_time"].replace('Z', '+00:00')),
-                current_deadline=datetime.fromisoformat(updated_db_round["current_deadline"].replace('Z', '+00:00')),
-                max_deadline=datetime.fromisoformat(updated_db_round["max_deadline"].replace('Z', '+00:00')),
-                active=updated_db_round["active"],
-                battle_image_url=updated_db_round.get("battle_image_url"),
-                winner=updated_db_round.get("winner")
-            )
+            return _map_db_round_to_pydantic(updated_db_round)
         else:
             actual_error = getattr(response, 'error', None)
             logger.error(f"Failed to update round or no data returned. Error: {actual_error}. Full response: {response}")
@@ -356,23 +335,7 @@ async def end_round_in_db(round_id: int, winner_side: Optional[Literal["left", "
 
         if response.data and len(response.data) > 0:
             ended_db_round = response.data[0]
-            # Reconstruct and return the full RoundModel
-            left_user = TwitterUser(handle="Left Player", avatar_url=ended_db_round["left_avatar_url"], display_name="Left Player")
-            right_user = TwitterUser(handle="Right Player", avatar_url=ended_db_round["right_avatar_url"], display_name="Right Player")
-
-            return RoundModel(
-                id=ended_db_round["id"],
-                left_user=left_user,
-                right_user=right_user,
-                momentum=ended_db_round["momentum"],
-                pot_amount=float(ended_db_round["pot_amount"]),
-                start_time=datetime.fromisoformat(ended_db_round["start_time"].replace('Z', '+00:00')),
-                current_deadline=datetime.fromisoformat(ended_db_round["current_deadline"].replace('Z', '+00:00')),
-                max_deadline=datetime.fromisoformat(ended_db_round["max_deadline"].replace('Z', '+00:00')),
-                active=ended_db_round["active"],
-                winner=ended_db_round.get("winner"), # Use .get() for safety
-                battle_image_url=ended_db_round.get("battle_image_url")
-            )
+            return _map_db_round_to_pydantic(ended_db_round)
         else:
             actual_error = getattr(response, 'error', None)
             logger.error(f"Failed to end round {round_id} or no data returned. Error: {actual_error}")
@@ -380,6 +343,48 @@ async def end_round_in_db(round_id: int, winner_side: Optional[Literal["left", "
     except Exception as e:
         logger.error(f"Exception ending round {round_id}: {e}", exc_info=True)
         return None
+
+async def update_round_battle_image_url_in_db(round_id: int, image_url: str) -> bool:
+    """
+    Updates the battle_image_url for a specific round.
+    Returns True on success, False on failure.
+    """
+    try:
+        logger.info(f"Updating battle_image_url for round {round_id} to: {image_url}")
+        response = (
+            supabase.table("rounds")
+            .update({"battle_image_url": image_url})
+            .eq("id", round_id)
+            .execute()
+        )
+        logger.debug(f"Supabase update_battle_image_url response: {response}")
+
+        if getattr(response, 'error', None):
+            logger.error(f"Error updating battle_image_url for round {round_id}: {response.error}")
+            return False
+        
+        # Check if any row was actually updated (response.data might be empty for update)
+        # For supabase-py v2, execute() on an update returns a ModelResponse with data (list of dicts) and count.
+        # If response.data is not empty and count > 0, it means the update likely affected rows.
+        if response.data and len(response.data) > 0:
+             logger.info(f"Successfully updated battle_image_url for round {round_id}.")
+             return True
+        elif response.count is not None and response.count > 0: # Fallback for some client versions or scenarios
+             logger.info(f"Successfully updated battle_image_url for round {round_id} (count based).")
+             return True
+        else:
+            # This might happen if the round_id doesn't exist, or if the value was the same.
+            # For our purposes, if no error and no data/count, it could mean no row matched or no change was needed.
+            # Consider it a non-failure if no error, but log appropriately.
+            logger.warning(f"Update battle_image_url for round {round_id} executed without error, but no data/count returned in response. This might mean the round was not found or value was unchanged. Response: {response}")
+            # Depending on strictness, this could be False. For now, if no Supabase error, let's say True if round might not exist.
+            # To be stricter, we'd want to confirm the round exists first or that count > 0.
+            # For a simple update, if no error is thrown, we can assume the command reached Supabase.
+            return True # Assuming no error means the operation was accepted by Supabase
+
+    except Exception as e:
+        logger.error(f"Exception updating battle_image_url for round {round_id}: {e}", exc_info=True)
+        return False
 
 # Placeholder for fetching bets for a round
 # async def get_bets_for_round_from_db(round_id: int, limit: int = 10) -> List[BetModel]:

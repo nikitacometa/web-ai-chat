@@ -55,7 +55,8 @@ async def place_bet(bet_request: BetRequest) -> BetResponse:
         # Now update the round state
         updated_round: Optional[RoundModel] = await update_round_after_bet_in_db(
             round_id=active_round.id,
-            bet_amount=created_bet.amount, # Use amount from the confirmed created_bet
+            bet_amount=created_bet.amount, # Use amount from the confirmed created_bet for pot
+            bet_impact=created_bet.impact if created_bet.impact is not None else 0.0, # Use impact for momentum
             bet_side=created_bet.side
         )
 

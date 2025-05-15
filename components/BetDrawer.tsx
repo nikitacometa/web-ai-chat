@@ -141,7 +141,10 @@ export function BetDrawer({
   };
 
   return (
-    <Card className={`overflow-hidden ${className}`}>
+    <Card
+      className={`overflow-hidden ${className}`}
+      data-testid="bet-drawer-card"
+    >
       <CardHeader className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 pb-4">
         <CardTitle className="flex items-center gap-2">
           <Sword className="h-5 w-5 text-purple-500" />
@@ -163,7 +166,12 @@ export function BetDrawer({
             className="flex flex-col sm:flex-row gap-2"
           >
             <div className="flex-1">
-              <RadioGroupItem value="left" id="left" className="peer sr-only" />
+              <RadioGroupItem
+                value="left"
+                id="left"
+                className="peer sr-only"
+                data-testid="bet-drawer-side-left"
+              />
               <Label
                 htmlFor="left"
                 className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-transparent p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-500/10 [&:has([data-state=checked])]:border-blue-500 cursor-pointer"
@@ -182,6 +190,7 @@ export function BetDrawer({
                 value="right"
                 id="right"
                 className="peer sr-only"
+                data-testid="bet-drawer-side-right"
               />
               <Label
                 htmlFor="right"
@@ -204,6 +213,7 @@ export function BetDrawer({
             onChange={handleAmountChange}
             placeholder={`e.g., ${minimumBet}`}
             className="bg-background/50 border-muted focus-visible:border-purple-500/50 focus-visible:ring-purple-500/20"
+            data-testid="bet-drawer-amount-input"
           />
         </div>
 
@@ -221,6 +231,7 @@ export function BetDrawer({
               value={spellText}
               onChange={handleSpellChange}
               className="min-h-20 resize-none bg-background/50 border-muted focus-visible:border-purple-500/50 focus-visible:ring-purple-500/20"
+              data-testid="bet-drawer-spell-input"
             />
             {wordCount > 10 && (
               <div className="absolute top-0 right-0 bg-red-500/10 text-red-500 text-xs px-2 py-1 rounded-bl-md">
@@ -233,6 +244,7 @@ export function BetDrawer({
         {feedbackMessage && (
           <div
             className={`flex items-center gap-2 p-3 rounded-md text-sm ${feedbackMessage.type === 'success' ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700'}`}
+            data-testid="bet-drawer-feedback-message"
           >
             {feedbackMessage.type === 'success' ? (
               <CheckCircle2 className="h-5 w-5" />
@@ -257,6 +269,7 @@ export function BetDrawer({
           }
           className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-2 shadow-lg transition-all duration-200 hover:shadow-purple-500/20"
           size="lg"
+          data-testid="bet-drawer-submit-button"
         >
           <motion.div
             className="flex items-center justify-center gap-2"
