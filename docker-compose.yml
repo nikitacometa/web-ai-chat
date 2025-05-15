@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the backend code for live-reloading during development
+      # Any changes in ./backend on your host machine will reflect in the container
+      - ./backend:/app
+    env_file:
+      # You can create a .env file in the backend directory for local development secrets
+      # Example: backend/.env
+      # SUPABASE_URL=your_supabase_url
+      # SUPABASE_KEY=your_supabase_key
+      # OPENAI_API_KEY=your_openai_key
+      # ADMIN_API_TOKEN=your_local_admin_token
+      - ./backend/.env
+    # Override the CMD for development to enable --reload with uvicorn
+    # The Dockerfile CMD will be used for production builds unless overridden here
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+networks:
+  default:
+    driver: bridge 

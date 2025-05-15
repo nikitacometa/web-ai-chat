@@ -1,16 +1,17 @@
-# FOMO RUMBLE Development Plan
+# AlgoFOMO Development Plan
 
 ## Project Overview
 
-FOMO RUMBLE is a game where two Twitter avatars fight over a momentum bar (0-100). Players can bet ALGO cryptocurrency and include a 10-word spell to influence the momentum bar. The game ends when the momentum bar hits an edge or after 20 minutes of inactivity, with winners splitting 90% of the pot and 10% going to the developer.
+AlgoFOMO is a game where two Twitter avatars fight over a momentum bar (0-100). Players can bet ALGO cryptocurrency and include a 10-word spell to influence the momentum bar. The game ends when the momentum bar hits an edge, after 20 minutes of inactivity, or after a maximum of 24 hours. Each new bet extends the current round timer by 1 minute (up to the 24-hour cap). Winners split 90% of the pot and 10% going to the developer.
 
 ## Architecture
 
 - **Frontend**: Next.js + Tailwind CSS
-- **Backend**: FastAPI
+- **Backend**: FastAPI (managed with Pipenv)
 - **Database**: Supabase (PostgreSQL + Storage)
 - **Blockchain**: Algorand (via AlgoNode REST API)
-- **Image Generation**: Replicate SDXL API
+- **Image Generation**: OpenAI Image API
+- **Avatar Handling**: Twitter handles are provided manually. Avatar URLs are constructed (e.g., via unavatar.io or a configurable base URL), not fetched via a live Twitter API.
 
 ## Development Approach
 
@@ -29,34 +30,35 @@ We'll use the existing Next.js template as a starting point but simplify it sign
    - AwaitSpinner - Loading indicator
    - EndModal - Game end screen
    - AdminPanel - Admin interface
+   - TimerDisplay - Component to show time until current_deadline
 
 3. **Data fetching**:
    - Use SWR for polling or Supabase realtime for state updates
    - Implement proper error handling and loading states
 
 4. **Styling**:
-   - Use Tailwind CSS for styling
-   - Use Magic UI for generating UI components
+   - Use Tailwind CSS for styling.
+   - Employ Magic UI for generating UI components, aiming for a **simple, minimalistic, yet stylish** aesthetic. Incorporate smooth animations and responsive "flexing" elements where appropriate, without overcomplicating the design.
 
 ### 2. Backend Development
 
-We'll create a new FastAPI backend in a separate directory:
+We'll create a new FastAPI backend in a separate directory, using Pipenv for dependency management:
 
 1. **API Endpoints**:
-   - GET /state - Get full round and last 10 bets
-   - POST /bet - Process a bet with transaction ID, side, and prompt
+   - GET /state - Get full round and last 10 bets (including timer states)
+   - POST /bet - Process a bet, update timers, and enqueue image generation
    - POST /admin/reset - Start a new round (with token auth)
    - GET /history - Optional archive of past rounds
 
 2. **Background Jobs**:
-   - render_image - Generate images via Replicate SDXL API
-   - cron_end_round - Check for round end conditions (edge hit or timeout)
+   - render_image - Generate images via OpenAI Image API
+   - cron_end_round - Check for round end conditions (edge hit, inactivity, or 24h max duration)
    - payout.py - Manual script for distributing ALGO
 
 3. **Integration**:
    - Algorand blockchain via py-algorand-sdk
    - Supabase for database access
-   - Replicate for image generation
+   - OpenAI API for image generation
 
 ### 3. Database Setup
 
@@ -73,6 +75,8 @@ We'll use Supabase for database and storage:
      next_bet bigint,
      started_at timestamptz,
      ended_at timestamptz,
+     current_deadline timestamptz, -- Dynamically extended by bets
+     absolute_deadline timestamptz, -- 24-hour cap from round start
      img_url text
    );
 
@@ -89,74 +93,74 @@ We'll use Supabase for database and storage:
    ```
 
 2. **Realtime Subscriptions**:
-   - Set up realtime channel on rounds table for UI push
+   - Set up realtime channel on rounds table for UI push (especially for timer and image updates).
 
 ## Implementation Plan
 
 ### Phase 1: Setup and Basic Structure (1-2 days)
 
 1. **Project Setup**:
-   - Clean up the existing repository
+   - Complete repository cleanup
    - Set up Supabase project
-   - Create the database tables
-   - Initialize the FastAPI backend
+   - Create the database tables (as per updated schema)
+   - Initialize the FastAPI backend using Pipenv
 
 2. **Basic Frontend Structure**:
-   - Update app layout and metadata
-   - Create placeholder components
+   - Update app layout and metadata for AlgoFOMO
+   - Create placeholder components (including TimerDisplay)
    - Set up routing
 
 ### Phase 2: Core Functionality (3-4 days)
 
 1. **Wallet Integration**:
-   - Implement Algorand wallet connection using use-wallet
+   - Implement Algorand wallet connection using @txnlab/use-wallet
    - Create the WalletConnect component
 
 2. **Game UI**:
-   - Implement the Arena component with momentum bar
+   - Implement the Arena component (momentum bar, AI image placeholder, timer)
    - Create the BetDrawer component
-   - Implement basic game state management
+   - Implement basic game state management (client-side)
 
-3. **Backend Implementation**:
-   - Create the state endpoint
-   - Implement bet processing logic
-   - Set up transaction verification
+3. **Backend Implementation (Core Game Logic)**:
+   - Create the /state endpoint
+   - Implement /bet processing logic (transaction verification, bet rules, momentum update, timer updates: current_deadline and ensuring it respects absolute_deadline)
+   - Basic Supabase integration for reading/writing round and bet data.
 
 ### Phase 3: Image Generation and Real-time Updates (2-3 days)
 
 1. **Image Generation**:
-   - Integrate with Replicate SDXL API
-   - Implement the render_image job
-   - Create image caching mechanism
+   - Integrate with OpenAI Image API
+   - Implement the render_image background job
+   - Update /state to reflect new img_url
 
-2. **Real-time Updates**:
-   - Set up Supabase realtime subscriptions
-   - Implement the round end checking job
-   - Create the AwaitSpinner component
+2. **Real-time Updates & Round End Logic**:
+   - Set up Supabase realtime subscriptions for frontend updates
+   - Implement the cron_end_round job (checking all win/end conditions including inactivity and absolute_deadline)
+   - Create the AwaitSpinner component for image loading
 
 ### Phase 4: Admin and Payouts (1-2 days)
 
 1. **Admin Interface**:
    - Create the AdminPanel component
-   - Implement the reset endpoint
+   - Implement the /admin/reset endpoint (setting initial current_deadline and absolute_deadline). Input for Twitter handles will be strings, and avatar URLs will be constructed by the backend.
    - Add authentication for admin routes
 
 2. **Payout System**:
-   - Implement the payout script
+   - Implement the payout.py script
    - Create winner calculation logic
    - Set up security measures for the custody wallet
 
 ### Phase 5: Testing and Refinement (2-3 days)
 
 1. **Testing**:
-   - Test all functionality
+   - Test all functionality, especially timer logic and payouts
    - Verify security measures
    - Check performance under load
 
 2. **Refinement**:
    - Fix bugs and issues
    - Optimize performance
-   - Add final polish to the UI
+   - Add final polish to the UI (animations, responsiveness)
 
 ## File Structure
 
@@ -164,7 +168,7 @@ We'll use Supabase for database and storage:
 
 ```
 app/
-  layout.tsx                 # Main layout with metadata
+  layout.tsx                 # Main layout for AlgoFOMO
   page.tsx                   # Main game page
   admin/
     page.tsx                 # Admin interface
@@ -175,24 +179,28 @@ components/
   AwaitSpinner.tsx           # Loading indicator
   EndModal.tsx               # Game end screen
   MomentumBar.tsx            # Momentum bar visualization
-  ui/                        # UI components
+  TimerDisplay.tsx           # Shows time to deadline
+  ui/                        # UI components (potentially from Magic UI)
 hooks/
   useGameState.ts            # Game state management
-  useWallet.ts               # Wallet integration
+  useWallet.ts               # Wallet integration hooks
 lib/
   supabase.ts                # Supabase client
   utils.ts                   # Utility functions
+  algorand.ts                # Algorand related utility functions (if any for frontend)
 ```
 
 ### Backend
 
 ```
-backend/
+backend/  # Managed with Pipenv
+  Pipfile
+  Pipfile.lock
   server.py                  # Main FastAPI application
   models.py                  # Data models
   routes.py                  # API routes
-  services.py                # Business logic
-  jobs.py                    # Background jobs
+  services.py                # Business logic (game logic, timer logic)
+  jobs.py                    # Background jobs (image_gen, end_round)
   utils.py                   # Utility functions
   config.py                  # Configuration
   payout.py                  # Payout script
@@ -206,19 +214,22 @@ backend/
 - Tailwind CSS
 - @txnlab/use-wallet (for Algorand wallet integration)
 - @supabase/supabase-js
-- SWR (for data fetching)
-- Magic UI (for UI generation)
+- SWR (for data fetching, or react-query)
+- Magic UI (for UI generation assistance)
+- zustand (optional, for state management if needed beyond SWR/context)
 
-### Backend
+### Backend (managed via Pipfile)
 
-- FastAPI
+- fastapi[all]
 - httpx
 - python-dotenv
 - supabase
 - py-algorand-sdk
+- openai
+- uvicorn
 
 ## Conclusion
 
-This development plan outlines a structured approach to building the FOMO RUMBLE game. By leveraging the existing Next.js template and using recommended libraries for Algorand and Supabase integration, we can create a high-quality application efficiently. The plan breaks down the development into manageable phases and addresses potential challenges.
+This development plan outlines a structured approach to building the AlgoFOMO game. By leveraging a clean Next.js setup, FastAPI with Pipenv, and Supabase, along with targeted UI generation, we can create a high-quality application efficiently. The plan breaks down the development into manageable phases, incorporating the new timer mechanics and image generation strategy.
 
-Total estimated development time: 9-14 days
+Total estimated development time: 9-14 days (may need slight adjustment based on new complexities)

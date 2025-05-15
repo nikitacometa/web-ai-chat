@@ -1,8 +1,8 @@
-# FOMO RUMBLE Backend Development Plan
+# AlgoFOMO Backend Development Plan
 
 ## Overview
 
-The backend for FOMO RUMBLE will be built using FastAPI, a modern, high-performance web framework for building APIs with Python. It will interact with Supabase for database operations, AlgoNode for Algorand blockchain integration, and Replicate for SDXL image generation.
+The backend for AlgoFOMO will be built using FastAPI (managed with Pipenv), a modern, high-performance web framework for building APIs with Python. It will interact with Supabase for database operations, AlgoNode for Algorand blockchain integration, and OpenAI API for image generation.
 
 ## Architecture
 
@@ -15,8 +15,8 @@ The backend for FOMO RUMBLE will be built using FastAPI, a modern, high-performa
           ┌──────────────┼──────────────┐
           │              │              │
 ┌─────────▼────────┐ ┌───▼───┐ ┌────────▼────────┐
-│  Supabase DB &   │ │AlgoNode│ │  Replicate     │
-│     Storage      │ │  REST  │ │  SDXL API      │
+│  Supabase DB &   │ │AlgoNode│ │  OpenAI        │
+│     Storage      │ │  REST  │ │  Image API     │
 └──────────────────┘ └───────┘ └─────────────────┘
 ```
 
@@ -26,11 +26,13 @@ The backend for FOMO RUMBLE will be built using FastAPI, a modern, high-performa
 ALGOD_NODE=https://mainnet-api.algonode.cloud
 ALGOD_TOKEN=xxxxxxxx
 HOT_WALLET_MNEMONIC="..."
-REPLICATE_API_TOKEN=...
+OPENAI_API_KEY=...
 SUPABASE_URL=...
 SUPABASE_KEY=...
-ROUND_TIMEOUT_SEC=1200
 ADMIN_TOKEN=...  # For admin authentication
+ROUND_INACTIVITY_TIMEOUT_SEC=1200 # 20 minutes for no bets
+MAX_ROUND_DURATION_SEC=86400   # 24 hours absolute max from round start
+BET_TIME_EXTENSION_SEC=60      # 1 minute extension per bet
 ```
 
 ## API Endpoints
@@ -51,6 +53,8 @@ Returns the current round state and the last 10 bets.
     "next_bet": 105000,
     "started_at": "2023-05-15T12:00:00Z",
     "ended_at": null,
+    "current_deadline": "2023-05-15T12:20:00Z", // Deadline considering inactivity & bet extensions
+    "absolute_deadline": "2023-05-16T12:00:00Z", // Max 24h deadline
     "img_url": "https://..."
   },
   "bets": [
@@ -71,7 +75,7 @@ Returns the current round state and the last 10 bets.
 
 ### 2. POST /bet
 
-Processes a new bet, verifies the transaction, updates the game state, and enqueues an image generation job.
+Processes a new bet, verifies the transaction, updates the game state (including `current_deadline`, capped by `absolute_deadline`), and enqueues an image generation job.
 
 **Request:**
 ```json
@@ -88,13 +92,15 @@ Processes a new bet, verifies the transaction, updates the game state, and enque
   "success": true,
   "bet_id": 457,
   "impact": 3.2,
-  "new_momentum": 68
+  "new_momentum": 68,
+  "new_current_deadline": "2023-05-15T12:21:00Z"
 }
 ```
 
 ### 3. POST /admin/reset
 
-Starts a new round with specified Twitter handles. Requires admin token authentication.
+Starts a new round. Initializes `started_at`, `absolute_deadline` (now + 24h), and `current_deadline` (now + inactivity_timeout). Requires admin token authentication.
+Player Twitter handles are provided as strings. Avatar URLs are constructed (e.g., using a service like unavatar.io or a configurable base URL) and are not fetched via a live Twitter API integration at the time of round creation.
 
 **Request:**
 ```json
@@ -113,7 +119,9 @@ Authorization: Bearer ADMIN_TOKEN
 ```json
 {
   "success": true,
-  "round_id": 124
+  "round_id": 124,
+  "initial_current_deadline": "YYYY-MM-DDTHH:mm:ssZ",
+  "absolute_deadline": "YYYY-MM-DDTHH:mm:ssZ"
 }
 ```
 
@@ -137,6 +145,8 @@ Returns historical rounds data.
       "winner_side": "R",
       "started_at": "2023-05-15T12:00:00Z",
       "ended_at": "2023-05-15T12:30:00Z",
+      "current_deadline": "2023-05-15T12:30:00Z",
+      "absolute_deadline": "2023-05-16T12:00:00Z",
       "img_url": "https://..."
     },
     // ... more rounds
@@ -148,24 +158,29 @@ Returns historical rounds data.
 
 ### 1. render_image(job_id)
 
-Generates a new image using Replicate SDXL API based on the current game state and the latest bet's prompt.
+Generates a new image using OpenAI Image API based on the current game state and the latest bet's prompt.
+The handles `left_handle` and `right_handle` (along with their constructed avatar URLs) are retrieved from the current round data.
 
-1. Get the current round and latest bet
-2. Construct the prompt: `<left> vs <right>, cyber-arena, momentum=<x>% + user spell`
-3. Call Replicate API to generate the image
-4. Save the image URL to the round record
-5. Update the Supabase storage with the image
+1. Get the current round and latest bet data from Supabase.
+2. Construct the prompt: `<left> vs <right>, cyber-arena, momentum=<x>% + user spell`.
+3. Call OpenAI API (e.g., DALL-E 3) to generate the image.
+4. Save the image URL to the round record in Supabase.
+5. Optionally, store the image itself in Supabase Storage if direct URL is not permanent or desired.
 
 ### 2. cron_end_round()
 
-Runs every 60 seconds to check if the current round should end.
+Runs periodically (e.g., every 60 seconds) to check if the current active round should end.
 
-1. Get the current active round
-2. Check if the momentum has hit 0 or 100
-3. Check if the round has been idle for more than ROUND_TIMEOUT_SEC seconds
-4. If either condition is met, mark the round as ended
-5. Calculate winners based on the final momentum
-6. Update the round record with the end time and winner information
+1. Get the current active round from Supabase.
+2. If no active round, do nothing.
+3. Check end conditions in order:
+    a. Momentum hit 0 or 100.
+    b. Current time >= `round.current_deadline` (inactivity timeout).
+    c. Current time >= `round.absolute_deadline` (max duration timeout).
+4. If any condition is met:
+    a. Mark the round as ended in Supabase.
+    b. Calculate winners based on the final momentum (if timeout, side closer to edge wins).
+    c. Update the round record with end time and winner information.
 
 ### 3. payout.py
 
@@ -180,9 +195,15 @@ Manual script to distribute ALGO to winners.
 
 ## Data Models
 
-### 1. Round
+(Using Pydantic for FastAPI request/response models and internal data structures where applicable)
+
+### 1. Round (Pydantic model for API responses, mirrors Supabase table)
 
 ```python
+from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel
+
 class Round(BaseModel):
     id: int
     left_handle: str
@@ -192,13 +213,15 @@ class Round(BaseModel):
     next_bet: int
     started_at: datetime
     ended_at: Optional[datetime] = None
+    current_deadline: datetime
+    absolute_deadline: datetime
     img_url: Optional[str] = None
-    
+
     class Config:
-        orm_mode = True
+        orm_mode = True # if interacting with an ORM, else from_attributes = True for newer Pydantic
 ```
 
-### 2. Bet
+### 2. Bet (Pydantic model, mirrors Supabase table)
 
 ```python
 class Bet(BaseModel):
@@ -210,33 +233,35 @@ class Bet(BaseModel):
     prompt: str
     impact: float
     created_at: datetime
-    
+
     class Config:
-        orm_mode = True
+        orm_mode = True # or from_attributes = True
 ```
 
-### 3. BetRequest
+### 3. BetRequest (Pydantic model for POST /bet)
 
 ```python
+from pydantic import BaseModel, field_validator
+
 class BetRequest(BaseModel):
     txid: str
     side: str
     prompt: str
-    
-    @validator('side')
+
+    @field_validator('side')
     def validate_side(cls, v):
         if v not in ['L', 'R']:
             raise ValueError('side must be either "L" or "R"')
         return v
-    
-    @validator('prompt')
+
+    @field_validator('prompt')
     def validate_prompt(cls, v):
-        if len(v) > 70:
+        if len(v) > 70: # As per PRD
             raise ValueError('prompt must be 70 characters or less')
         return v
 ```
 
-### 4. AdminResetRequest
+### 4. AdminResetRequest (Pydantic model for POST /admin/reset)
 
 ```python
 class AdminResetRequest(BaseModel):
@@ -246,109 +271,54 @@ class AdminResetRequest(BaseModel):
 
 ## Implementation Details
 
-### 1. Transaction Verification
+### Timer Management (New Section)
+- **Round Start (`/admin/reset`):** 
+    - `started_at` = now
+    - `absolute_deadline` = `started_at` + `MAX_ROUND_DURATION_SEC`
+    - `current_deadline` = `started_at` + `ROUND_INACTIVITY_TIMEOUT_SEC`
+- **Bet Placement (`/bet`):**
+    - New `current_deadline` = now + `ROUND_INACTIVITY_TIMEOUT_SEC`
+    - This new `current_deadline` must be `min(new_current_deadline, round.absolute_deadline)`.
+    - Update `rounds` table with the new `current_deadline`.
 
-1. Get the transaction details from AlgoNode using the txid
-2. Verify that the transaction is valid and confirmed
-3. Check that the amount meets the minimum bet requirement
-4. Verify that the receiver is the game's wallet address
+### Transaction Verification (remains the same)
 
-### 2. Impact Calculation
+### Impact Calculation (remains the same)
 
-```python
-def calculate_impact(bet_amount, prompt):
-    # Count power words in the prompt
-    power_words = count_power_words(prompt)
-    prompt_power = min(max(power_words / 10, 0.5), 1.5)
-    
-    # Calculate impact based on bet amount and prompt power
-    impact = min(math.log10(bet_amount) * prompt_power * random.uniform(0.8, 1.2), 10)
-    
-    return impact
-```
+### Momentum Update (remains the same)
 
-### 3. Momentum Update
+### Winner Calculation
+(Logic for determining winning side based on momentum if edge hit, or closest to edge on timeout, remains valid. Timeout now covers inactivity, or max duration.)
 
-```python
-def update_momentum(current_momentum, impact, side):
-    if side == 'L':
-        new_momentum = current_momentum - impact
-    else:  # side == 'R'
-        new_momentum = current_momentum + impact
-    
-    # Clamp momentum between 0 and 100
-    return max(0, min(100, new_momentum))
-```
-
-### 4. Winner Calculation
-
-```python
-def calculate_winners(round_id):
-    # Get the round
-    round = get_round(round_id)
-    
-    # Determine winning side
-    if round.momentum <= 0:
-        winning_side = 'L'
-    elif round.momentum >= 100:
-        winning_side = 'R'
-    else:
-        # If timeout, side closer to edge wins
-        winning_side = 'L' if round.momentum < 50 else 'R'
-    
-    # Get all bets for the winning side
-    winning_bets = get_bets_by_side(round_id, winning_side)
-    
-    # Calculate payouts (90% to winners proportional to their bets)
-    total_winning_amount = sum(bet.amount for bet in winning_bets)
-    winner_pot = round.pot * 0.9
-    
-    payouts = []
-    for bet in winning_bets:
-        payout = (bet.amount / total_winning_amount) * winner_pot
-        payouts.append({
-            "address": bet.sender,
-            "amount": int(payout)
-        })
-    
-    # 10% to admin
-    admin_payout = round.pot * 0.1
-    payouts.append({
-        "address": ADMIN_ADDRESS,
-        "amount": int(admin_payout)
-    })
-    
-    return payouts
-```
-
-## File Structure
+## File Structure (Managed with Pipenv)
 
 ```
 backend/
+├── Pipfile
+├── Pipfile.lock
 ├── main.py              # FastAPI application entry point
-├── models.py            # Pydantic models
+├── models.py            # Pydantic models (as defined above)
 ├── routes/
 │   ├── state.py         # GET /state endpoint
 │   ├── bet.py           # POST /bet endpoint
 │   ├── admin.py         # POST /admin/reset endpoint
 │   └── history.py       # GET /history endpoint
 ├── services/
-│   ├── algorand.py      # Algorand integration
-│   ├── supabase.py      # Supabase integration
-│   ├── replicate.py     # Replicate SDXL integration
-│   └── game.py          # Game logic
+│   ├── algorand_service.py # Algorand integration
+│   ├── supabase_service.py # Supabase integration
+│   ├── openai_service.py   # OpenAI Image API integration
+│   └── game_service.py     # Core game logic, timer management
 ├── jobs/
-│   ├── render_image.py  # Image generation job
-│   ├── end_round.py     # Round end checking job
-│   └── payout.py        # Payout script
+│   ├── render_image_job.py # Image generation job
+│   ├── end_round_job.py    # Round end checking job
+│   └── payout.py           # Payout script (manual)
 ├── utils/
-│   ├── auth.py          # Authentication utilities
-│   ├── validation.py    # Input validation
-│   └── helpers.py       # Misc helper functions
-├── config.py            # Configuration and environment variables
-└── requirements.txt     # Dependencies
+│   ├── auth.py             # Authentication utilities (e.g., for admin token)
+│   ├── validation.py       # General validation helpers (if any beyond Pydantic)
+│   └── helpers.py          # Misc helper functions
+├── config.py               # Configuration and environment variables loader
 ```
 
 ## Conclusion
 
-This backend plan provides a comprehensive blueprint for implementing the FOMO RUMBLE game server. It covers all the required functionality, including API endpoints, background jobs, data models, and implementation details. The modular structure allows for easy maintenance and extension.
+This backend plan provides a comprehensive blueprint for implementing the AlgoFOMO game server using FastAPI with Pipenv. It covers updated API endpoints, background jobs including OpenAI integration, revised data models for new timer mechanics, and a refined file structure. The modular design aims for maintainability and extensibility.

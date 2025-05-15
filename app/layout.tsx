@@ -1,15 +1,16 @@
 import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { ThemeProvider } from '@/components/theme-provider';
+// import { ThemeProvider } from '@/components/theme-provider'; // Removed, will add back if/when needed
 
 import './globals.css';
-import { SessionProvider } from 'next-auth/react';
+// SessionProvider is likely not needed as we removed next-auth
+// import { SessionProvider } from 'next-auth/react'; 
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://chat.vercel.ai'),
-  title: 'Next.js Chatbot Template',
-  description: 'Next.js chatbot template using the AI SDK.',
+  metadataBase: new URL('http://localhost:3000'), // Placeholder, update when domain is known
+  title: 'AlgoFOMO - Algorand Avatar Battles',
+  description: 'Bet ALGO, cast spells, and watch Twitter avatars battle for momentum in AlgoFOMO!',
 };
 
 export const viewport = {
@@ -28,6 +29,7 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 });
 
+// Theme color script can be kept if we plan to implement light/dark mode later via CSS only or a new simple provider
 const LIGHT_THEME_COLOR = 'hsl(0 0% 100%)';
 const DARK_THEME_COLOR = 'hsl(240deg 10% 3.92%)';
 const THEME_COLOR_SCRIPT = `\
@@ -40,7 +42,7 @@ const THEME_COLOR_SCRIPT = `\
     document.head.appendChild(meta);
   }
   function updateThemeColor() {
-    var isDark = html.classList.contains('dark');
+    var isDark = html.classList.contains('dark'); // This assumes a 'dark' class is manually/CSS managed
     meta.setAttribute('content', isDark ? '${DARK_THEME_COLOR}' : '${LIGHT_THEME_COLOR}');
   }
   var observer = new MutationObserver(updateThemeColor);
@@ -71,15 +73,11 @@ export default async function RootLayout({
         />
       </head>
       <body className="antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Toaster position="top-center" />
-          <SessionProvider>{children}</SessionProvider>
-        </ThemeProvider>
+        {/* <ThemeProvider> removed, children directly rendered */}
+        <Toaster position="top-center" />
+        {/* SessionProvider removed, children directly rendered */}
+        {children}
+        {/* </ThemeProvider> */}
       </body>
     </html>
   );
