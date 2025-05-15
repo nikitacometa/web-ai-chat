@@ -1,6 +1,6 @@
-# AlgoFOMO: The Ultimate Algorand Twitter Avatar Battle Game!
+# AlgoFOMO: The Ultimate Algorand Avatar Battle Game!
 
-AlgoFOMO is a game where two Twitter avatars (represented by their handles) battle over a momentum bar (0-100). Players can bet ALGO cryptocurrency and include a 10-word spell to influence the momentum bar. The game ends when the momentum bar hits an edge (0 or 100), after 20 minutes of inactivity, or after a maximum of 24 hours. Each new bet extends the current round timer by 1 minute (up to the 24-hour cap).
+AlgoFOMO is a game where two avatars (represented by their image URLs) battle over a momentum bar (0-100). Players can bet ALGO cryptocurrency and include a 10-word spell to influence the momentum bar. The game ends when the momentum bar hits an edge (0 or 100), after 20 minutes of inactivity, or after a maximum of 24 hours. Each new bet extends the current round timer by 1 minute (up to the 24-hour cap).
 
 ## Tech Stack
 
@@ -131,7 +131,8 @@ pnpm dev
 ## How to Use
 
 1.  **Admin Panel**: Navigate to `/admin` on the frontend.
-    *   Enter the Twitter handles for the two participants.
+    *   Enter the direct image URLs for the two participant avatars.
+    *   Optionally, set the initial momentum (0-100, default 50).
     *   Enter the `ADMIN_API_TOKEN` (as configured in `backend/.env`).
     *   Click "Start New Round".
 2.  **Main Game Page**: Navigate to the homepage (`/`).

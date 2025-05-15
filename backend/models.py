@@ -61,9 +61,12 @@ class Bet(BetRequest):
     tx_id: Optional[str] = None
 
 class AdminResetRequest(BaseModel):
-    left_handle: str
-    right_handle: str
-    initial_momentum: int = 50
+    left_avatar_url: str
+    right_avatar_url: str
+    # Optional: Could add display names if needed
+    # left_display_name: Optional[str] = "Player 1"
+    # right_display_name: Optional[str] = "Player 2"
+    initial_momentum: int = Field(default=50, ge=0, le=100)
     admin_token: str
 
 class GameState(BaseModel):

@@ -100,13 +100,15 @@ Processes a new bet, verifies the transaction, updates the game state (including
 ### 3. POST /admin/reset
 
 Starts a new round. Initializes `started_at`, `absolute_deadline` (now + 24h), and `current_deadline` (now + inactivity_timeout). Requires admin token authentication.
-Player Twitter handles are provided as strings. Avatar URLs are constructed (e.g., using a service like unavatar.io or a configurable base URL) and are not fetched via a live Twitter API integration at the time of round creation.
+Direct avatar image URLs and an optional initial momentum (0-100, default 50) are provided for the participants.
 
 **Request:**
 ```json
 {
-  "left_handle": "user1",
-  "right_handle": "user2"
+  "left_avatar_url": "https://example.com/avatar1.png",
+  "right_avatar_url": "https://example.com/avatar2.png",
+  "initial_momentum": 50, // Optional, defaults to 50
+  "admin_token": "your_secret_admin_token"
 }
 ```
 
@@ -265,8 +267,10 @@ class BetRequest(BaseModel):
 
 ```python
 class AdminResetRequest(BaseModel):
-    left_handle: str
-    right_handle: str
+    left_avatar_url: str
+    right_avatar_url: str
+    initial_momentum: int = Field(default=50, ge=0, le=100)
+    admin_token: str
 ```
 
 ## Implementation Details

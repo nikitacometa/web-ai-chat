@@ -105,9 +105,10 @@ export async function fetchRoundBets(roundId: number, limit = 50, offset = 0): P
  * Start a new game round (admin only)
  */
 export async function startNewRound(
-  leftHandle: string, 
-  rightHandle: string, 
-  adminToken: string
+  leftAvatarUrl: string, 
+  rightAvatarUrl: string, 
+  adminToken: string,
+  initialMomentum: number = 50
 ): Promise<{ success: boolean; round?: GameRound; message: string }> {
   try {
     const response = await fetch(`${API_BASE_URL}/admin/reset`, {
@@ -116,9 +117,9 @@ export async function startNewRound(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        left_handle: leftHandle,
-        right_handle: rightHandle,
-        initial_momentum: 50,
+        left_avatar_url: leftAvatarUrl,
+        right_avatar_url: rightAvatarUrl,
+        initial_momentum: initialMomentum,
         admin_token: adminToken,
       }),
     });

@@ -8,9 +8,10 @@ import { startNewRound } from "@/lib/api";
 import { GameRound } from "@/lib/types";
 
 export default function AdminPage() {
-  const [leftHandle, setLeftHandle] = useState("");
-  const [rightHandle, setRightHandle] = useState("");
+  const [leftAvatarUrl, setLeftAvatarUrl] = useState("");
+  const [rightAvatarUrl, setRightAvatarUrl] = useState("");
   const [adminToken, setAdminToken] = useState("");
+  const [initialMomentum, setInitialMomentum] = useState("50");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<{ success?: boolean; message?: string; round?: GameRound }>({});
 
@@ -20,7 +21,16 @@ export default function AdminPage() {
     setResult({});
 
     try {
-      const response = await startNewRound(leftHandle, rightHandle, adminToken);
+      const momentum = parseInt(initialMomentum, 10);
+      if (isNaN(momentum) || momentum < 0 || momentum > 100) {
+        setResult({ 
+          success: false, 
+          message: "Initial momentum must be a number between 0 and 100."
+        });
+        setIsLoading(false);
+        return;
+      }
+      const response = await startNewRound(leftAvatarUrl, rightAvatarUrl, adminToken, momentum);
       setResult(response);
     } catch (error) {
       setResult({ 
@@ -42,23 +52,39 @@ export default function AdminPage() {
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="leftHandle">Left Twitter Handle</Label>
+              <Label htmlFor="leftAvatarUrl">Left Avatar URL</Label>
               <Input
-                id="leftHandle"
-                placeholder="e.g., elonmusk"
-                value={leftHandle}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLeftHandle(e.target.value)}
+                id="leftAvatarUrl"
+                type="url"
+                placeholder="e.g., https://example.com/avatar1.png"
+                value={leftAvatarUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLeftAvatarUrl(e.target.value)}
                 required
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="rightHandle">Right Twitter Handle</Label>
+              <Label htmlFor="rightAvatarUrl">Right Avatar URL</Label>
               <Input
-                id="rightHandle"
-                placeholder="e.g., SBF_FTX"
-                value={rightHandle}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRightHandle(e.target.value)}
+                id="rightAvatarUrl"
+                type="url"
+                placeholder="e.g., https://example.com/avatar2.png"
+                value={rightAvatarUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRightAvatarUrl(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="initialMomentum">Initial Momentum (0-100)</Label>
+              <Input
+                id="initialMomentum"
+                type="number"
+                placeholder="50"
+                value={initialMomentum}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInitialMomentum(e.target.value)}
+                min="0"
+                max="100"
                 required
               />
             </div>

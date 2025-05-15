@@ -28,25 +28,27 @@ async def reset_game(request: AdminResetRequest):
         # 3. Generate an initial battle image
         
         # For demo purposes, we'll create a mock response
-        # Mock Twitter avatar URLs - would be fetched from Twitter API
-        left_avatar = f"https://unavatar.io/twitter/{request.left_handle}"
-        right_avatar = f"https://unavatar.io/twitter/{request.right_handle}"
+        # Avatar URLs are now provided directly in the request
         
         current_time = datetime.now()
-        initial_deadline = current_time + timedelta(minutes=20)  # 20 min initial deadline
-        max_deadline = current_time + timedelta(hours=24)  # 24 hour max duration
+        # Read from environment or use defaults for timeouts
+        inactivity_timeout_minutes = int(os.environ.get("ROUND_INACTIVITY_TIMEOUT_MINUTES", "20"))
+        max_duration_hours = int(os.environ.get("MAX_ROUND_DURATION_HOURS", "24"))
+
+        initial_deadline = current_time + timedelta(minutes=inactivity_timeout_minutes)
+        max_deadline = current_time + timedelta(hours=max_duration_hours)
         
         new_round = Round(
             id=1,  # Would be auto-generated in DB
             left_user=TwitterUser(
-                handle=request.left_handle,
-                avatar_url=left_avatar,
-                display_name=request.left_handle  # Would be fetched from Twitter
+                handle="Left Player", # Or derive from URL if desired
+                avatar_url=request.left_avatar_url,
+                display_name="Left Player" # Or derive from URL
             ),
             right_user=TwitterUser(
-                handle=request.right_handle,
-                avatar_url=right_avatar,
-                display_name=request.right_handle  # Would be fetched from Twitter
+                handle="Right Player", # Or derive from URL
+                avatar_url=request.right_avatar_url,
+                display_name="Right Player" # Or derive from URL
             ),
             momentum=request.initial_momentum,
             pot_amount=0.0,

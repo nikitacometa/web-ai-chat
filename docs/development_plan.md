@@ -11,7 +11,7 @@ AlgoFOMO is a game where two Twitter avatars fight over a momentum bar (0-100). 
 - **Database**: Supabase (PostgreSQL + Storage)
 - **Blockchain**: Algorand (via AlgoNode REST API)
 - **Image Generation**: OpenAI Image API
-- **Avatar Handling**: Twitter handles are provided manually. Avatar URLs are constructed (e.g., via unavatar.io or a configurable base URL), not fetched via a live Twitter API.
+- **Avatar Handling**: Direct avatar image URLs are provided manually via the admin interface.
 
 ## Development Approach
 
@@ -68,8 +68,8 @@ We'll use Supabase for database and storage:
    ```sql
    create table rounds (
      id bigint primary key,
-     left_handle text,
-     right_handle text,
+     left_avatar_url text,
+     right_avatar_url text,
      momentum int,
      pot bigint,
      next_bet bigint,
@@ -142,7 +142,7 @@ We'll use Supabase for database and storage:
 
 1. **Admin Interface**:
    - Create the AdminPanel component
-   - Implement the /admin/reset endpoint (setting initial current_deadline and absolute_deadline). Input for Twitter handles will be strings, and avatar URLs will be constructed by the backend.
+   - Implement the /admin/reset endpoint (setting initial current_deadline and absolute_deadline). Input for avatars will be direct image URLs and an optional initial momentum value.
    - Add authentication for admin routes
 
 2. **Payout System**:
