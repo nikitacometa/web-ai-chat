@@ -1,10 +1,19 @@
 import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { ConnectWalletButton } from '@/components/ConnectWalletButton';
+// import { ConnectWalletButton } from '@/components/ConnectWalletButton'; // Will be used inside WalletProvider context
 // import { ThemeProvider } from '@/components/theme-provider'; // Removed, will add back if/when needed
 
 import './globals.css';
+
+// Removed @txnlab/use-wallet imports
+// import { WalletProvider, useInitializeProviders, PROVIDER_ID } from '@txnlab/use-wallet';
+// import { PeraWalletConnect } from '@perawallet/connect';
+// import { DeflyWalletConnect } from '@blockshake/defly-connect';
+import algosdk from 'algosdk'; // Still needed for algosdk operations if any in layout
+import { WalletConnectButton } from '@/components/WalletConnectButton'; // This will be the Pera-specific one
+import { PeraWalletProvider } from '@/contexts/PeraWalletContext'; // Import the provider
+
 // SessionProvider is likely not needed as we removed next-auth
 // import { SessionProvider } from 'next-auth/react';
 
@@ -52,6 +61,8 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
+// Removed AppProviders component that wrapped WalletProvider
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -75,25 +86,26 @@ export default async function RootLayout({
         />
       </head>
       <body className="antialiased">
-        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
-            <div className="mr-4 hidden md:flex">
-              {/* Placeholder for Logo/Brand */}
-              <a className="mr-6 flex items-center space-x-2" href="/">
-                <span className="hidden font-bold sm:inline-block">
-                  AlgoFOMO
-                </span>
-              </a>
+        <PeraWalletProvider>
+          <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
+              <div className="mr-4 hidden md:flex">
+                {/* Placeholder for Logo/Brand */}
+                <a className="mr-6 flex items-center space-x-2" href="/">
+                  <span className="hidden font-bold sm:inline-block">
+                    AlgoFOMO
+                  </span>
+                </a>
+              </div>
+              <div className="flex items-center space-x-2">
+                <WalletConnectButton />{' '}
+                {/* This button will be Pera-specific */}
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <ConnectWalletButton />
-            </div>
-          </div>
-        </header>
-        <Toaster position="top-center" />
-        {/* SessionProvider removed, children directly rendered */}
-        {children}
-        {/* </ThemeProvider> */}
+          </header>
+          <Toaster position="top-center" />
+          {children}
+        </PeraWalletProvider>
       </body>
     </html>
   );

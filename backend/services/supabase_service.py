@@ -386,6 +386,72 @@ async def update_round_battle_image_url_in_db(round_id: int, image_url: str) -> 
         logger.error(f"Exception updating battle_image_url for round {round_id}: {e}", exc_info=True)
         return False
 
+async def get_ended_unpaid_rounds_from_db(limit: int = 10) -> List[RoundModel]:
+    """
+    Fetches ended rounds (active=False, winner IS NOT NULL) that have not been paid (paid_at IS NULL).
+    Orders by ended_at ascending to process older rounds first.
+    """
+    try:
+        logger.info(f"Fetching up to {limit} ended and unpaid rounds.")
+        response = (
+            supabase.table("rounds")
+            .select("*")
+            .eq("active", False)
+            .not_("winner", "is", "null") # Winner must be set
+            .is_("paid_at", "null")       # paid_at must be null
+            .order("ended_at", desc=False) # Process oldest first
+            .limit(limit)
+            .execute()
+        )
+        logger.debug(f"Supabase get_ended_unpaid_rounds response: {response}")
+
+        if response.data:
+            return [_map_db_round_to_pydantic(db_round) for db_round in response.data]
+        elif getattr(response, 'error', None):
+            logger.error(f"Error fetching ended unpaid rounds: {response.error}")
+            return []
+        else:
+            logger.info("No ended unpaid rounds found.")
+            return []
+    except Exception as e:
+        logger.error(f"Exception fetching ended unpaid rounds: {e}", exc_info=True)
+        return []
+
+async def get_all_rounds_from_db(limit: int = 20, offset: int = 0, active_only: Optional[bool] = None) -> List[RoundModel]:
+    """
+    Fetches rounds from Supabase with pagination.
+    Orders by start_time descending (most recent first).
+    Can optionally filter by 'active' status.
+    """
+    try:
+        query_message = f"Fetching rounds with limit {limit}, offset {offset}"
+        if active_only is not None:
+            query_message += f", active_only={active_only}"
+        logger.info(query_message)
+
+        query = supabase.table("rounds").select("*").order("start_time", desc=True).range(offset, offset + limit - 1)
+        
+        if active_only is not None:
+            query = query.eq("active", active_only)
+            
+        response = await query.execute() # Assuming supabase-py v2+ might make execute() awaitable on query itself
+                                      # or specific client (like postgrest-py) is async.
+                                      # If strictly sync, remove await and ensure client setup is sync for routes.
+
+        logger.debug(f"Supabase get_all_rounds response: {response}")
+
+        if response.data:
+            return [_map_db_round_to_pydantic(db_round) for db_round in response.data]
+        elif getattr(response, 'error', None):
+            logger.error(f"Error fetching rounds: {response.error}")
+            return []
+        else:
+            logger.info("No rounds found for the given criteria.")
+            return []
+    except Exception as e:
+        logger.error(f"Exception fetching rounds: {e}", exc_info=True)
+        return []
+
 # Placeholder for fetching bets for a round
 # async def get_bets_for_round_from_db(round_id: int, limit: int = 10) -> List[BetModel]:
 # pass 

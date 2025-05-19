@@ -1,7 +1,6 @@
 import type { CoreAssistantMessage, CoreToolMessage, UIMessage } from 'ai';
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { Document } from '@/lib/db/schema';
 import { ChatSDKError, type ErrorCode } from './errors';
 
 export function cn(...inputs: ClassValue[]) {
@@ -64,16 +63,6 @@ export function getMostRecentUserMessage(messages: Array<UIMessage>) {
   return userMessages.at(-1);
 }
 
-export function getDocumentTimestampByIndex(
-  documents: Array<Document>,
-  index: number,
-) {
-  if (!documents) return new Date();
-  if (index > documents.length) return new Date();
-
-  return documents[index].createdAt;
-}
-
 export function getTrailingMessageId({
   messages,
 }: {
@@ -90,9 +79,27 @@ export function sanitizeText(text: string) {
   return text.replace('<has_function_call>', '');
 }
 
-export function truncateAddress(address: string, chars = 4): string {
-  if (!address) return "";
-  const start = address.substring(0, chars + 2); // 0x + chars
-  const end = address.substring(address.length - chars);
-  return `${start}...${end}`;
+/**
+ * Truncates a string in the middle, e.g., an address.
+ * @param str The string to truncate.
+ * @param firstChars Number of characters to show from the start.
+ * @param lastChars Number of characters to show from the end.
+ * @returns The truncated string with an ellipsis in the middle.
+ */
+export function truncateAddress(
+  str: string | undefined | null,
+  firstChars = 6, // Default for Algorand addresses (e.g., 6 front, 4 back)
+  lastChars = 4,
+): string {
+  if (!str) {
+    return '';
+  }
+  // If the string is too short to be meaningfully truncated, return it as is.
+  if (str.length <= firstChars + lastChars + 3) {
+    // +3 for "..."
+    return str;
+  }
+  const first = str.substring(0, firstChars);
+  const last = str.substring(str.length - lastChars);
+  return `${first}...${last}`;
 }

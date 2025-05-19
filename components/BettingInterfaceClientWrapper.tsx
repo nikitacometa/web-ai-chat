@@ -1,11 +1,29 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Suspense } from 'react';
 import { Arena, ArenaFallback } from '@/components/Arena';
 import { BetDrawer } from '@/components/BetDrawer';
 import { placeBet } from '@/lib/api';
 import { GameState, BetRequest, GameRound, Bet } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import algosdk from 'algosdk';
+import { usePeraWallet } from '@/contexts/PeraWalletContext';
+
+// Helper to get algod client (should ideally be in a shared lib/algorand.ts or similar)
+// For now, defining it here for simplicity in this step.
+const getAlgodClient = () => {
+  const algodToken = process.env.NEXT_PUBLIC_ALGORAND_NODE_TOKEN || '';
+  const algodServer =
+    process.env.NEXT_PUBLIC_ALGORAND_NODE_SERVER ||
+    'https://testnet-api.algonode.cloud';
+  const algodPort = process.env.NEXT_PUBLIC_ALGORAND_NODE_PORT || '443';
+  return new algosdk.Algodv2(algodToken, algodServer, algodPort);
+};
+
+// TODO: Get this from settings/config
+const GAME_TREASURY_ADDRESS =
+  process.env.NEXT_PUBLIC_GAME_TREASURY_ADDRESS ||
+  'PLACEHOLDER_TREASURY_ADDRESS_ALGONFOMO';
 
 interface BettingInterfaceClientWrapperProps {
   initialGameState: GameState;
@@ -17,6 +35,16 @@ export default function BettingInterfaceClientWrapper({
   const [gameState, setGameState] = useState<GameState>(serverInitialState);
   const [isBetting, setIsBetting] = useState(false); // For global feedback if needed
 
+  // Get Pera Wallet state and methods from context
+  const {
+    peraWallet, // The PeraWalletConnect instance from context
+    activeAddress,
+    // isPeraConnecting, // Not directly needed here, button handles its state
+    // peraWalletAvailable, // Also handled by button
+    // handlePeraConnect, // Not called directly here, button does it
+    // handlePeraDisconnect // Not called directly here, button does it
+  } = usePeraWallet();
+
   // If serverInitialState changes (e.g. parent re-fetches), update client state
   useEffect(() => {
     setGameState(serverInitialState);
@@ -24,7 +52,7 @@ export default function BettingInterfaceClientWrapper({
 
   // Supabase Realtime subscriptions
   useEffect(() => {
-    if (!gameState.round || !gameState.round.id) {
+    if (!gameState.round || !gameState.round.id || !supabase) {
       return;
     }
 
@@ -157,39 +185,96 @@ export default function BettingInterfaceClientWrapper({
       supabase.removeChannel(betsChannel);
       // supabase.removeAllChannels(); // Use if you want to remove all, regardless of specific round
     };
-  }, [gameState.round?.id]); // Depend on round.id
+  }, [gameState.round?.id, supabase]); // Added supabase to dependency array
 
-  const handleActualPlaceBet = async (betData: BetRequest): Promise<void> => {
+  const handleActualPlaceBet = async (
+    betDataFromDrawer: Omit<BetRequest, 'tx_id' | 'wallet_address'> & {
+      amount: number;
+      side: 'left' | 'right';
+      spell: string;
+    },
+  ) => {
+    if (!activeAddress || !peraWallet) {
+      console.error(
+        'Pera Wallet not connected or PeraWallet instance not available.',
+      );
+      throw new Error(
+        'Wallet not connected. Please connect your Pera Wallet to place a bet.',
+      );
+    }
+    if (
+      !GAME_TREASURY_ADDRESS ||
+      GAME_TREASURY_ADDRESS === 'PLACEHOLDER_TREASURY_ADDRESS_ALGONFOMO'
+    ) {
+      console.error('Game treasury address is not configured.');
+      throw new Error(
+        'Game treasury address is not configured. Bet cannot be placed.',
+      );
+    }
+
     setIsBetting(true);
-    console.log('Placing bet with data (client-side):', betData);
-    // Here you would show a toast: toast.loading("Placing your bet...");
+    console.log('Placing bet, data from drawer:', betDataFromDrawer);
+
     try {
-      const response = await placeBet(betData);
+      const algodClient = getAlgodClient();
+      const suggestedParams = await algodClient.getTransactionParams().do();
+      const amountInMicroAlgos = Math.round(
+        betDataFromDrawer.amount * 1_000_000,
+      );
+
+      const paymentTxnObject = {
+        sender: activeAddress,
+        receiver: GAME_TREASURY_ADDRESS,
+        amount: amountInMicroAlgos,
+        suggestedParams,
+        note: new Uint8Array(
+          Buffer.from(
+            `AlgoFOMO Bet: Round ${gameState.round.id}, Spell: ${betDataFromDrawer.spell}`,
+          ),
+        ),
+      };
+      const txnToSign =
+        algosdk.makePaymentTxnWithSuggestedParamsFromObject(paymentTxnObject);
+
+      const signedTxns = await peraWallet.signTransaction([
+        [{ txn: txnToSign, signers: [activeAddress] }],
+      ]);
+
+      // Submit transaction - casting to any due to incorrect PostTransactionsResponse type in algosdk v3.2.0
+      const submissionResponse: any = await algodClient
+        .sendRawTransaction(signedTxns[0])
+        .do();
+      const txId: string = submissionResponse.txId;
+      console.log('Transaction submitted with Pera, ID:', txId);
+
+      const finalBetRequest: BetRequest = {
+        round_id: gameState.round.id,
+        side: betDataFromDrawer.side,
+        amount: betDataFromDrawer.amount,
+        spell: betDataFromDrawer.spell,
+        wallet_address: activeAddress,
+        tx_id: txId,
+      };
+
+      const response = await placeBet(finalBetRequest);
       console.log('Bet API Response:', response);
+
       if (response.success && response.updated_round_state) {
-        // toast.success("Bet placed successfully!");
-        // Update game state with the new round state from the response
         setGameState((prevState) => ({
-          ...prevState, // Keep other parts of game state (like recent_bets if they weren't updated by this call)
-          round: response.updated_round_state as GameRound, // Type assertion
-          // Potentially re-fetch all bets or intelligently update recent_bets list if API provides new bet
+          ...prevState,
+          round: response.updated_round_state as GameRound,
         }));
-        // A more robust solution would be to call fetchGameState() again or use SWR/TanStack Query's mutate/invalidateQueries
       } else {
-        // toast.error(response.message || "Failed to place bet.");
         throw new Error(
           response.message ||
-            'Bet placement failed but API returned success=false or no round state.',
+            'Bet processing failed after transaction submission.',
         );
       }
     } catch (error) {
-      console.error('Error placing bet:', error);
-      // toast.error(error instanceof Error ? error.message : "An unexpected error occurred.");
-      // Re-throw so BetDrawer can also catch it if it needs to
+      console.error('Error during Pera bet placement process:', error);
       throw error;
     } finally {
       setIsBetting(false);
-      // toast.dismiss(); // Dismiss loading toast if any
     }
   };
 
@@ -201,7 +286,7 @@ export default function BettingInterfaceClientWrapper({
   }
 
   const { round } = gameState;
-  const walletAddress = 'USER_WALLET_PLACEHOLDER'; // Replace with actual wallet state
+  // const walletAddress = "USER_WALLET_PLACEHOLDER"; // Replaced by activeAddress from useWallet
   const minimumBet = 0.1; // Could come from config or game state
 
   return (
@@ -228,13 +313,13 @@ export default function BettingInterfaceClientWrapper({
       <div className="mt-6 w-full max-w-md">
         <BetDrawer
           roundId={round.id}
-          walletAddress={walletAddress}
+          walletAddress={activeAddress || ''} // Use activeAddress from context
           leftSideLabel={round.left_user.display_name || round.left_user.handle}
           rightSideLabel={
             round.right_user.display_name || round.right_user.handle
           }
           minimumBet={minimumBet}
-          onPlaceBet={handleActualPlaceBet} // Wire up the actual handler
+          onPlaceBet={handleActualPlaceBet as any} // Cast as any due to BetRequest modification for internal handling
         />
       </div>
     </>

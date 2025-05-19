@@ -33,6 +33,7 @@ class Round(BaseModel):
     active: bool = True
     winner: Optional[Literal["left", "right"]] = None
     battle_image_url: Optional[str] = None
+    paid_at: Optional[datetime] = None
 
 class BetRequest(BaseModel):
     round_id: int
@@ -40,6 +41,7 @@ class BetRequest(BaseModel):
     amount: float
     spell: str
     wallet_address: str
+    tx_id: str
     
     @validator('spell')
     def validate_spell_length(cls, v):

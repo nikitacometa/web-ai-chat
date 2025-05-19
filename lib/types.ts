@@ -18,14 +18,14 @@ export interface GameRound {
   current_deadline: string; // ISO datetime string
   max_deadline: string; // ISO datetime string
   active: boolean;
-  winner?: "left" | "right" | null;
+  winner?: 'left' | 'right' | null;
   battle_image_url?: string | null;
 }
 
 export interface Bet {
   id: number;
   round_id: number;
-  side: "left" | "right";
+  side: 'left' | 'right';
   amount: number;
   spell: string;
   wallet_address: string;
@@ -44,10 +44,11 @@ export interface GameState {
 
 export interface BetRequest {
   round_id: number;
-  side: "left" | "right";
+  side: 'left' | 'right';
   amount: number;
   spell: string;
   wallet_address: string;
+  tx_id: string;
 }
 
 export interface BetResponse {
