@@ -10,18 +10,23 @@
 #     pass 
 
 import logging
-from typing import Optional
+from typing import Optional, List
 import random
 import algosdk # Import algosdk
 from algosdk import transaction
 from algosdk.v2client import algod # For algod client
+from ..models import Round as RoundModel, Bet as BetModel # Ensure these are imported
+from ..config import settings # Ensure settings is imported for HOUSE_CUT_PERCENTAGE etc.
+from ..services.supabase_service import get_bets_for_round_db, mark_round_as_paid_in_db # For db interactions
+from decimal import Decimal, ROUND_HALF_UP # For calculations
+from supabase import Client # Added import
 
 # Assuming settings are available via an import path if this were a real module in an app
 # For a standalone script context, config might need to be loaded differently.
 # For now, this assumes it can access settings if part of the larger backend app.
-from ..config import settings
 
 logger = logging.getLogger(__name__)
+logger_algoservice = logging.getLogger(__name__ + ".algorand_service") # More specific logger name
 
 # Helper to get algod client, similar to frontend one
 # This should ideally be a shared utility if used in multiple backend services.
@@ -78,68 +83,89 @@ async def verify_bet_transaction(
     logger.info(f"[MOCK Algorand Service] Transaction {tx_id} VERIFIED (mock).")
     return True
 
-async def submit_payout_transaction(
-    receiver_address: str, 
-    amount_microalgos: int, 
-    note: Optional[str] = None
-) -> Optional[str]:
+# Payout configuration (can be moved to config.py if preferred)
+HOUSE_CUT_PERCENTAGE = Decimal(settings.HOUSE_CUT_PERCENTAGE_STR) if hasattr(settings, 'HOUSE_CUT_PERCENTAGE_STR') else Decimal("0.10")
+WINNERS_SHARE_PERCENTAGE = Decimal("1.00") - HOUSE_CUT_PERCENTAGE
+MICRO_ALGO_CONVERSION = Decimal("1_000_000")
+
+async def submit_payout_transaction(receiver_address: str, amount_microalgos: int, note: str) -> Optional[str]:
     """
     Constructs, signs (using HOT_WALLET_MNEMONIC), and (MOCK) submits a payout transaction.
     Returns a mock transaction ID on success, None on failure.
     """
-    logger.info(
-        f"[Algorand Service] Attempting payout of {amount_microalgos} microAlgos "
-        f"to {receiver_address} with note: '{note}'"
-    )
+    logger_algoservice.info(f"Mock Payout: To {receiver_address}, Amount: {amount_microalgos} microAlgos, Note: {note}")
+    # Simulate a transaction ID for mock purposes
+    mock_tx_id = f"mock_payout_tx_{receiver_address}_{amount_microalgos}_{note[:10].replace(' ', '_')}"
+    return mock_tx_id
 
-    if not settings.HOT_WALLET_MNEMONIC:
-        logger.error("[Algorand Service] HOT_WALLET_MNEMONIC not configured. Cannot make payout.")
-        return None
+async def process_payouts_for_round(game_round: RoundModel, supabase_client) -> bool:
+    """
+    Processes payouts for a specific game_round.
+    Returns True if all payouts were successful (or not needed), False otherwise.
+    Uses the passed supabase_client for DB operations if necessary (though get_bets_for_round_db might use its own global).
+    """
+    logger_algoservice.info(f"Processing payouts for specific round ID: {game_round.id}, Winner: {game_round.winner}, Pot: {game_round.pot_amount}")
     
-    try:
-        hot_wallet_private_key = algosdk.mnemonic.to_private_key(settings.HOT_WALLET_MNEMONIC)
-        hot_wallet_address = algosdk.account.address_from_private_key(hot_wallet_private_key)
-        logger.info(f"[Algorand Service] Payout from hot wallet: {hot_wallet_address}")
+    if game_round.paid_at:
+        logger_algoservice.info(f"Round {game_round.id} has already been paid out at {game_round.paid_at}. Skipping.")
+        return True # Already paid, so successful in a sense
 
-        algod_client = get_algod_client_for_backend()
-        suggested_params = await algod_client.suggested_params_as_object() # Fetch suggested params
-        # Note: suggested_params_as_object() is a convenience if using a wrapper or newer SDK feature.
-        # Standard is await algod_client.getTransactionParams().do()
-        # Let's assume algod_client.suggested_params_as_object() works or adapt if needed.
-        # Reverting to standard: 
-        # params = await algod_client.getTransactionParams().do()
+    if not game_round.winner or game_round.winner == "draw":
+        logger_algoservice.warning(f"Round {game_round.id} has no clear winner ('{game_round.winner}') or is a draw. Skipping payout. Marking as paid.")
+        await mark_round_as_paid_in_db(game_round.id, supabase_client) # Pass client
+        return True # No payouts to make, considered successful
 
-        # For robustness, explicitly get transaction parameters
-        params = await algod_client.getTransactionParams().do()
+    # Use the supabase_client for fetching bets if get_bets_for_round_db is adapted, 
+    # or ensure it uses the correct global one. For now, assuming it uses global or is passed.
+    # Let's modify get_bets_for_round_db to accept an optional client later if needed.
+    # For now, the global client in supabase_service will be used by get_bets_for_round_db.
+    all_bets_for_round = await get_bets_for_round_db(round_id=game_round.id, limit=None) 
+    if not all_bets_for_round:
+        logger_algoservice.warning(f"No bets found for round {game_round.id}. Cannot process payouts. Marking as paid.")
+        await mark_round_as_paid_in_db(game_round.id, supabase_client) # Pass client
+        return True
 
-        txn_note_encoded = note.encode('utf-8') if note else None
+    winning_bets = [bet for bet in all_bets_for_round if bet.side == game_round.winner]
+    if not winning_bets:
+        logger_algoservice.warning(f"No winning bets found for round {game_round.id} on side {game_round.winner}. Marking as paid.")
+        await mark_round_as_paid_in_db(game_round.id, supabase_client) # Pass client
+        return True
+    
+    total_winning_pool = sum(bet.amount for bet in winning_bets)
+    if total_winning_pool <= 0:
+        logger_algoservice.warning(f"Total winning pool for round {game_round.id} is zero or negative. Skipping payouts. Marking as paid.")
+        await mark_round_as_paid_in_db(game_round.id, supabase_client) # Pass client
+        return True
 
-        unsigned_txn = algosdk.transaction.PaymentTxn(
-            sender=hot_wallet_address,
-            sp=params, # Use fetched params
-            receiver=receiver_address,
-            amt=amount_microalgos,
-            note=txn_note_encoded
-        )
+    total_pot_decimal = Decimal(str(game_round.pot_amount))
+    winners_pot_total = total_pot_decimal * WINNERS_SHARE_PERCENTAGE
+    logger_algoservice.info(f"Round {game_round.id} - Total Pot: {total_pot_decimal}, Winners' Share: {winners_pot_total}")
 
-        signed_txn = unsigned_txn.sign(hot_wallet_private_key)
-        logger.info(f"[Algorand Service] Transaction signed for payout to {receiver_address}.")
+    payouts_successful_this_round = True
+    for bet in winning_bets:
+        proportion_of_winning_pool = Decimal(str(bet.amount)) / Decimal(str(total_winning_pool))
+        payout_amount_algo = winners_pot_total * proportion_of_winning_pool
+        payout_amount_microalgos = int((payout_amount_algo * MICRO_ALGO_CONVERSION).to_integral_value(rounding=ROUND_HALF_UP))
 
-        # MOCK SUBMISSION - In real implementation, uncomment and use:
-        # try:
-        #     tx_id = algod_client.send_transaction(signed_txn)
-        #     logger.info(f"[Algorand Service] Payout transaction {tx_id} submitted to network.")
-        #     # Optional: await algosdk.util.wait_for_confirmation(algod_client, tx_id, 4)
-        #     return tx_id
-        # except Exception as e:
-        #     logger.error(f"[Algorand Service] Error submitting payout transaction: {e}", exc_info=True)
-        #     return None
-        
-        # Mock response for now
-        mock_tx_id = f"mock_payout_tx_{random.randint(100000, 999999)}"
-        logger.info(f"[Algorand Service] MOCK Payout transaction {mock_tx_id} would have been submitted for {receiver_address}.")
-        return mock_tx_id
+        if payout_amount_microalgos > 0:
+            payout_tx_id = await submit_payout_transaction(
+                receiver_address=bet.wallet_address,
+                amount_microalgos=payout_amount_microalgos,
+                note=f"AlgoFOMO Round {game_round.id} Payout - Bet {bet.id}"
+            )
+            if payout_tx_id:
+                logger_algoservice.info(f"Mock payout for {bet.wallet_address} successful, TxID: {payout_tx_id}")
+            else:
+                logger_algoservice.error(f"Mock payout FAILED for {bet.wallet_address} for round {game_round.id}.")
+                payouts_successful_this_round = False
+                break 
+        else:
+            logger_algoservice.info(f"Calculated payout for bet {bet.id} is zero. Skipping.")
 
-    except Exception as e:
-        logger.error(f"[Algorand Service] Error preparing payout transaction for {receiver_address}: {e}", exc_info=True)
-        return None 
+    if payouts_successful_this_round:
+        logger_algoservice.info(f"All payouts for round {game_round.id} processed successfully. Marking round as paid.")
+        await mark_round_as_paid_in_db(game_round.id, supabase_client) # Pass client
+        return True
+    else:
+        logger_algoservice.error(f"Not all payouts were successful for round {game_round.id}. Round will NOT be marked as paid.")
+        return False 

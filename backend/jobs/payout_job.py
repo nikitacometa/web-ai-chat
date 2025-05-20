@@ -1,23 +1,16 @@
 import asyncio
 import logging
 import os
-import sys
 from decimal import Decimal, ROUND_HALF_UP
 
-# Add the parent directory (backend) to sys.path to allow sibling imports
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PARENT_DIR = os.path.dirname(SCRIPT_DIR)
-if PARENT_DIR not in sys.path:
-    sys.path.append(PARENT_DIR)
-
-from services.supabase_service import (
+from ..services.supabase_service import (
     get_ended_unpaid_rounds_from_db,
     get_bets_for_round_db,
     mark_round_as_paid_in_db
 )
-from services.algorand_service import submit_payout_transaction # Mock for now
-from models import Round as RoundModel, Bet as BetModel
-from config import settings
+from ..services.algorand_service import submit_payout_transaction # Mock for now
+from ..models import Round as RoundModel, Bet as BetModel
+from ..config import settings
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

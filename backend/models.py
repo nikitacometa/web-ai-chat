@@ -84,3 +84,14 @@ class BetResponse(BaseModel):
     message: str
     bet: Optional[Bet] = None
     updated_round_state: Optional[Round] = None 
+
+class StartGameRequest(BaseModel):
+    left_player_handle: str
+    left_player_avatar_url: str
+    left_player_display_name: Optional[str] = None
+    right_player_handle: str
+    right_player_avatar_url: str
+    right_player_display_name: Optional[str] = None
+    initial_momentum: int = Field(default=50, ge=0, le=100)
+    initial_spell_prompt: Optional[str] = "A new battle commences!"
+    admin_token: str # For direct verification if not using Depends for this specific model 

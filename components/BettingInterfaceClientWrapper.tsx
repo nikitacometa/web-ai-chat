@@ -244,8 +244,18 @@ export default function BettingInterfaceClientWrapper({
       const submissionResponse: any = await algodClient
         .sendRawTransaction(signedTxns[0])
         .do();
-      const txId: string = submissionResponse.txId;
+      // Correctly assign txId by accessing the .txid (lowercase) property from the submissionResponse object
+      const txId: string = submissionResponse.txid;
       console.log('Transaction submitted with Pera, ID:', txId);
+
+      if (!txId) {
+        console.error(
+          'Failed to retrieve transaction ID from Pera submission response object property .txid.',
+        );
+        throw new Error(
+          'Transaction ID was not returned after submission (from .txid).',
+        );
+      }
 
       const finalBetRequest: BetRequest = {
         round_id: gameState.round.id,

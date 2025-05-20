@@ -5,14 +5,18 @@ name = "pypi"
 
 [packages]
 fastapi = "*"
-uvicorn = {extras = ["standard"], version = "*"}
-httpx = "*"
-python-dotenv = "*"
+uvicorn = {version = "*", extras = ["standard"]}
+pydantic = "*"
 supabase = "*"
-openai = "*"
-py-algorand-sdk = "*"
+python-dotenv = "*"
+algosdk = "*"
+pydantic-settings = "*"
 
 [dev-packages]
+pytest = "*"
+httpx = "*"
+asgi-lifespan = "*"
+pytest-asyncio = "*"
 
 [requires]
-python_version = "3.11" 
+python_version = "3.11"

@@ -3,10 +3,10 @@
 
 from supabase import create_client, Client
 from ..config import settings
-from ..models import Round as RoundModel, TwitterUser, Bet as BetModel, BetRequest # Modified import
+from ..models import Round as RoundModel, TwitterUser, Bet as BetModel, BetRequest, GameState # Modified import
 from ..utils.game_logic import calculate_bet_impact # Import the new function
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Literal # Added Literal
+from typing import Optional, List, Literal, Tuple # Added Literal and Tuple
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,10 @@ if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
     # For now, this will likely cause create_client to fail if they are empty strings
     
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+def get_supabase_client() -> Client:
+    """FastAPI dependency to get the global Supabase client."""
+    return supabase
 
 def _map_db_round_to_pydantic(db_round_data: dict) -> RoundModel:
     """Helper function to map a raw round dict from Supabase to a RoundModel."""
@@ -285,7 +289,7 @@ async def get_bets_for_round_db(round_id: int, limit: Optional[int] = 10, offset
         if limit is not None:
             query = query.range(offset, offset + limit - 1) # Supabase uses range for limit/offset
         
-        response = await query.execute() # Changed to await query.execute() as it's an async call now
+        response = query.execute() # Changed to query.execute() as it's an async call now
 
         logger.debug(f"Supabase get_bets_for_round response: {response}")
 
@@ -434,7 +438,7 @@ async def get_all_rounds_from_db(limit: int = 20, offset: int = 0, active_only: 
         if active_only is not None:
             query = query.eq("active", active_only)
             
-        response = await query.execute() # Assuming supabase-py v2+ might make execute() awaitable on query itself
+        response = query.execute() # Assuming supabase-py v2+ might make execute() awaitable on query itself
                                       # or specific client (like postgrest-py) is async.
                                       # If strictly sync, remove await and ensure client setup is sync for routes.
 
@@ -452,6 +456,231 @@ async def get_all_rounds_from_db(limit: int = 20, offset: int = 0, active_only: 
         logger.error(f"Exception fetching rounds: {e}", exc_info=True)
         return []
 
+async def create_mock_game_state_in_db(supabase: Client) -> Optional[RoundModel]:
+    """
+    Deactivates any current round and sets up a new mock game round with mock bets.
+    """
+    logger.info("Attempting to set up mock game state.")
+    
+    # 1. Deactivate any existing active rounds
+    await deactivate_all_active_rounds_in_db()
+    logger.info("Deactivated any existing active rounds.")
+
+    # 2. Define Mock Data
+    now = datetime.now(timezone.utc)
+    # We are creating mock users just to get their avatar_url for the round table
+    # The current _map_db_round_to_pydantic creates TwitterUser objects on the fly
+    # using only avatar_url from the DB and hardcoded handles/display_names.
+    # So, for mock round insertion, we only need to provide the avatar URLs.
+    mock_left_avatar_url = "https://picsum.photos/seed/mockleft/200"
+    mock_right_avatar_url = "https://picsum.photos/seed/mockright/200"
+
+    mock_round_data = {
+        "left_avatar_url": mock_left_avatar_url,
+        "right_avatar_url": mock_right_avatar_url,
+        "momentum": 65,
+        "pot_amount": 125.0,
+        "start_time": now.isoformat(),
+        "current_deadline": (now + timedelta(minutes=15)).isoformat(),
+        "max_deadline": (now + timedelta(hours=23, minutes=55)).isoformat(),
+        "active": True,
+        "battle_image_url": "https://picsum.photos/seed/battle/1024/768" # Initial mock image
+    }
+
+    try:
+        logger.info(f"Inserting mock round data: {mock_round_data}")
+        round_insert_response = supabase.table("rounds").insert(mock_round_data).execute()
+        logger.info(f"Mock round insert response: {round_insert_response}")
+        
+        if not round_insert_response.data:
+            logger.error("Failed to insert mock round or no data returned.")
+            return None
+        
+        inserted_round_raw = round_insert_response.data[0]
+        # Map raw DB round to Pydantic model
+        created_round = _map_db_round_to_pydantic(inserted_round_raw)
+        if not created_round:
+            logger.error("Failed to map inserted mock round to Pydantic model.")
+            return None
+        logger.info(f"Successfully inserted mock round with ID: {created_round.id}")
+
+        # 3. Define Mock Bets for this round
+        mock_bets_data = [
+            {
+                "round_id": created_round.id,
+                "side": "left",
+                "amount": 50.0,
+                "spell": "Fortuna Major!",
+                "wallet_address": "MOCKWALLETLEFT001",
+                "tx_id": "mocktx_left_001",
+                "timestamp": (now - timedelta(seconds=30)).isoformat(), # Bet placed 30s ago
+                "processed": True, # Assume processed for mock
+                "impact": 10.0 # Example impact
+            },
+            {
+                "round_id": created_round.id,
+                "side": "right",
+                "amount": 75.0,
+                "spell": "Imperium Maxima!",
+                "wallet_address": "MOCKWALLETRIGHT002",
+                "tx_id": "mocktx_right_002",
+                "timestamp": (now - timedelta(seconds=15)).isoformat(), # Bet placed 15s ago
+                "processed": True,
+                "impact": -15.0 # Example impact
+            }
+        ]
+        logger.info(f"Inserting mock bets data: {mock_bets_data}")
+        bets_insert_response = supabase.table("bets").insert(mock_bets_data).execute()
+        logger.info(f"Mock bets insert response: {bets_insert_response}")
+
+        if not bets_insert_response.data:
+            logger.warning("No data returned from mock bets insertion, but proceeding with round.")
+        else:
+            logger.info(f"Successfully inserted {len(bets_insert_response.data)} mock bets.")
+
+        return created_round # Return the created round model
+    
+    except Exception as e:
+        logger.error(f"Error creating mock game state: {e}", exc_info=True)
+        return None
+
+# Ensure _map_db_round_to_pydantic is available and correctly maps user info
+# If _map_db_round_to_pydantic expects left_user_info and right_user_info as dicts,
+# make sure it loads them from JSON string if that's how they are stored from insert.
+
+async def get_full_game_state_by_round(round_obj: RoundModel, supabase: Client) -> GameState:
+    """Helper to construct the full GameState object from a round."""
+    recent_bets_raw = await get_bets_for_round_db(round_id=round_obj.id, supabase_client=supabase, limit=10) # Use existing
+    
+    recent_bets_models = []
+    total_bets_count = 0
+    left_side_bets_amount = 0.0
+    right_side_bets_amount = 0.0
+
+    # Re-fetch all bets for the round to calculate aggregates accurately
+    all_bets_for_round_response = await supabase.table("bets").select("*", count="exact").eq("round_id", round_obj.id).execute()
+    
+    if all_bets_for_round_response.data:
+        total_bets_count = all_bets_for_round_response.count or len(all_bets_for_round_response.data)
+        for bet_data in all_bets_for_round_response.data:
+            # Map raw bet data to BetModel. Assuming a helper or direct Pydantic conversion.
+            # For simplicity, let's assume BetModel can be directly instantiated if fields match.
+            # This might need a _map_db_bet_to_pydantic if structure differs significantly.
+            try:
+                bet_model = BetModel(**bet_data) # Direct instantiation
+                if bet_model.side == "left":
+                    left_side_bets_amount += bet_model.amount
+                elif bet_model.side == "right":
+                    right_side_bets_amount += bet_model.amount
+                
+                # For recent_bets, use the already mapped ones from get_bets_for_round_db
+                # This part is a bit tricky: get_bets_for_round_db likely returns Pydantic models.
+                # We need to ensure `recent_bets_models` is populated correctly.
+                # Let's assume get_bets_for_round_db returns a list of BetModel.
+            except Exception as e:
+                logger.error(f"Error mapping bet data to BetModel: {bet_data}, error: {e}")
+
+
+    # Populate recent_bets_models from recent_bets_raw (which should be list[BetModel])
+    if isinstance(recent_bets_raw, list): # Ensure it's a list (of BetModels)
+        recent_bets_models = recent_bets_raw
+    else: # If it returns raw data or something else, this needs adjustment
+        logger.warning(f"get_bets_for_round_db returned unexpected type: {type(recent_bets_raw)}")
+
+
+    return GameState(
+        round=round_obj,
+        recent_bets=recent_bets_models,
+        total_bets_count=total_bets_count,
+        left_side_bets_amount=left_side_bets_amount,
+        right_side_bets_amount=right_side_bets_amount
+    )
+
 # Placeholder for fetching bets for a round
 # async def get_bets_for_round_from_db(round_id: int, limit: int = 10) -> List[BetModel]:
 # pass 
+
+async def manually_end_active_game(supabase: Client) -> Tuple[Optional[RoundModel], str]:
+    """
+    Manually ends the current active game, determines winner based on momentum,
+    and processes (mock) payouts.
+    Returns the ended round and a status message.
+    """
+    # Local import to break circular dependency
+    from ..services.algorand_service import process_payouts_for_round
+
+    logger.info("Attempting to manually end the active game.")
+    active_round = await get_active_round_from_db() # Uses global supabase client
+
+    if not active_round:
+        logger.info("No active game found to manually end.")
+        return None, "No active game found to end."
+    
+    if not active_round.active:
+        logger.info(f"Round {active_round.id} is already inactive. Cannot end again.")
+        return active_round, f"Round {active_round.id} is already inactive."
+
+    logger.info(f"Manually ending round ID: {active_round.id}")
+
+    # Determine winner based on momentum
+    winner_side: Optional[Literal["left", "right", "draw"]] = None
+    if active_round.momentum < 50:
+        winner_side = "left"
+    elif active_round.momentum > 50:
+        winner_side = "right"
+    else: # Momentum is 50
+        winner_side = "draw"
+    
+    logger.info(f"Determined winner for round {active_round.id} is: {winner_side} (momentum: {active_round.momentum})")
+
+    ended_round = await end_round_in_db(active_round.id, winner_side, end_reason="manual_admin_end")
+    if not ended_round:
+        logger.error(f"Failed to mark round {active_round.id} as ended in DB.")
+        return active_round, f"Failed to end round {active_round.id} in database."
+    
+    logger.info(f"Round {ended_round.id} successfully marked as ended. Winner: {ended_round.winner}. Proceeding to payouts.")
+
+    # Process payouts for the ended round
+    # Pass the supabase client dependency obtained by the route
+    payouts_processed_successfully = await process_payouts_for_round(ended_round, supabase)
+    
+    payout_message = "Payouts processed (mocked)." if payouts_processed_successfully else "Payout processing failed or some payouts were unsuccessful."
+    if ended_round.paid_at: # Check if process_payouts_for_round marked it as paid
+        payout_message += f" Round marked as paid at {ended_round.paid_at}."
+    else:
+        payout_message += " Round not marked as paid."
+
+    logger.info(f"Manual end game process for round {ended_round.id} complete. {payout_message}")
+    return ended_round, f"Game ended. Winner: {ended_round.winner}. {payout_message}"
+
+async def mark_round_as_paid_in_db(round_id: int, client: Optional[Client] = None) -> bool:
+    """
+    Marks a round as paid by setting the paid_at timestamp.
+    Uses the provided client or the global supabase client.
+    """
+    db_client = client if client else supabase # Use provided client or fallback to global
+    now = datetime.now(timezone.utc)
+    try:
+        logger.info(f"Marking round {round_id} as paid at {now.isoformat()}.")
+        response = (
+            db_client.table("rounds")
+            .update({"paid_at": now.isoformat()})
+            .eq("id", round_id)
+            .execute()
+        )
+        if getattr(response, 'error', None):
+            logger.error(f"Error marking round {round_id} as paid: {response.error}")
+            return False
+        # Check if any row was actually updated
+        if response.data and len(response.data) > 0:
+            logger.info(f"Successfully marked round {round_id} as paid.")
+            return True
+        elif response.count is not None and response.count > 0: 
+            logger.info(f"Successfully marked round {round_id} as paid (count based).")
+            return True
+        else:
+            logger.warning(f"Mark round {round_id} as paid executed without error, but no data/count returned. Round might not have been found or value was unchanged.")
+            return True # Or False if stricter check needed
+    except Exception as e:
+        logger.error(f"Exception marking round {round_id} as paid: {e}", exc_info=True)
+        return False 

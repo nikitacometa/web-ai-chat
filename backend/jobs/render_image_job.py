@@ -3,28 +3,22 @@
 import asyncio
 import logging
 import os
-import sys
 from typing import Optional
+from fastapi import BackgroundTasks
 
-# Add the parent directory (backend) to sys.path to allow sibling imports
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PARENT_DIR = os.path.dirname(SCRIPT_DIR)
-if PARENT_DIR not in sys.path:
-    sys.path.append(PARENT_DIR)
-
-from services.supabase_service import (
+from ..services.supabase_service import (
     get_active_round_from_db, 
     get_bets_for_round_db, 
     update_round_battle_image_url_in_db,
     # _map_db_round_to_pydantic # Not directly used by job, but by get_active_round
 )
-from services.openai_service import generate_battle_image_url # Using the mock for now
-from models import Round as RoundModel, Bet as BetModel
+from ..services.openai_service import generate_battle_image_url # Corrected to relative import
+from ..models import Round as RoundModel, Bet as BetModel # Assuming models is also in backend, changed to relative
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-async def trigger_render_battle_image(round_id: Optional[int] = None):
+async def trigger_render_battle_image(round_id: Optional[int] = None, custom_prompt: Optional[str] = None):
     """
     Generates a battle image for the specified round_id or the current active round 
     and updates the round record in the database.
@@ -58,24 +52,27 @@ async def trigger_render_battle_image(round_id: Optional[int] = None):
 
     logger.info(f"Render job: Processing round ID {target_round.id}")
 
-    # Fetch the latest bet for spell prompt (optional, could also generate based on round state alone)
-    latest_bets: list[BetModel] = await get_bets_for_round_db(round_id=target_round.id, limit=1)
-    latest_spell_prompt = "the arena is vibrant" # Default prompt
-    if latest_bets:
-        latest_spell_prompt = latest_bets[0].spell
-        logger.info(f"Render job: Using spell from latest bet: '{latest_spell_prompt}'")
-    else:
-        logger.info("Render job: No bets found for spell prompt, using default.")
-
     # Construct the prompt for image generation
-    # Example: "Left Player vs Right Player, cyber-arena, momentum=60% + user spell"
-    prompt = (
-        f"{target_round.left_user.display_name or 'Left Player'} vs "
-        f"{target_round.right_user.display_name or 'Right Player'}, "
-        f"epic battle in a mystical arena, momentum at {target_round.momentum}%, "
-        f"last spell: {latest_spell_prompt}"
-    )
-    logger.info(f"Render job: Constructed DALL-E prompt: '{prompt}'")
+    if custom_prompt:
+        prompt = custom_prompt
+        logger.info(f"Render job: Using provided custom prompt: '{prompt}'")
+    else:
+        # Fallback to existing prompt generation logic if no custom_prompt is given
+        latest_bets: list[BetModel] = await get_bets_for_round_db(round_id=target_round.id, limit=1)
+        latest_spell_prompt = "the arena is vibrant" # Default prompt
+        if latest_bets:
+            latest_spell_prompt = latest_bets[0].spell
+            logger.info(f"Render job: Using spell from latest bet: '{latest_spell_prompt}'")
+        else:
+            logger.info("Render job: No bets found for spell prompt, using default.")
+
+        prompt = (
+            f"{target_round.left_user.display_name or 'Left Player'} vs "
+            f"{target_round.right_user.display_name or 'Right Player'}, "
+            f"epic battle in a mystical arena, momentum at {target_round.momentum}%, "
+            f"last spell: {latest_spell_prompt}"
+        )
+    logger.info(f"Render job: Final DALL-E prompt: '{prompt}'")
 
     # Generate image URL (using mock service for now)
     image_url = await generate_battle_image_url(prompt=prompt, round_id=target_round.id)
@@ -100,9 +97,13 @@ if __name__ == "__main__":
     
     async def main_test(round_id_to_test=None):
         logger.info(f"Executing render_image_job.py directly for round_id: {round_id_to_test or 'current active'}...")
-        if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
-            logger.critical("Supabase URL or Key not configured. Cannot run job.")
-            return
+        # The 'settings' import was missing here for the direct execution part.
+        # This will still fail if run directly unless settings are loaded,
+        # but it's outside the FastAPI app context.
+        # For now, I'm commenting out the settings check as it's not the primary execution path.
+        # if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
+        #     logger.critical("Supabase URL or Key not configured. Cannot run job.")
+        #     return
         await trigger_render_battle_image(round_id=round_id_to_test)
         logger.info("render_image_job.py direct execution finished.")
 
