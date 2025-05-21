@@ -37,6 +37,7 @@ export const {
   signOut,
 } = NextAuth({
   ...authConfig,
+  secret: process.env.AUTH_SECRET,
   providers: [
     Credentials({
       credentials: {},
@@ -66,8 +67,11 @@ export const {
       id: 'guest',
       credentials: {},
       async authorize() {
-        const [guestUser] = await createGuestUser();
-        return { ...guestUser, type: 'guest' };
+        const guestUser = await createGuestUser();
+        if (!guestUser || !guestUser.id) {
+          return null;
+        }
+        return { id: guestUser.id, email: guestUser.email, type: 'guest' };
       },
     }),
   ],

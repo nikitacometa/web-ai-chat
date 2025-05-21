@@ -237,6 +237,15 @@ export async function POST(request: Request) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
+    // Fallback for unexpected errors
+    console.error('Unexpected error in POST /api/chat:', error);
+    return new Response(
+      JSON.stringify({ message: 'An unexpected error occurred.' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
 }
 
@@ -261,12 +270,15 @@ export async function GET(request: Request) {
     return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
-  let chat: Chat;
+  let chat: Chat | null = null;
 
   try {
     chat = await getChatById({ id: chatId });
-  } catch {
-    return new ChatSDKError('not_found:chat').toResponse();
+  } catch (e) {
+    return new ChatSDKError(
+      'bad_request:database',
+      'Failed to retrieve chat data',
+    ).toResponse();
   }
 
   if (!chat) {
@@ -350,6 +362,13 @@ export async function DELETE(request: Request) {
   }
 
   const chat = await getChatById({ id });
+
+  if (!chat) {
+    return new ChatSDKError(
+      'not_found:chat',
+      'Chat not found or you do not have permission.',
+    ).toResponse();
+  }
 
   if (chat.userId !== session.user.id) {
     return new ChatSDKError('forbidden:chat').toResponse();
