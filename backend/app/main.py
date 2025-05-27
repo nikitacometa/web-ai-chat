@@ -32,6 +32,10 @@ app.add_middleware(
 # Include routers
 app.include_router(user_apps.router, prefix=settings.API_V1_STR)
 
+# Import and include generated content router
+from app.routes import generated_content
+app.include_router(generated_content.router)
+
 
 @app.get("/")
 async def root():

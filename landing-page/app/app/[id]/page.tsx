@@ -8,7 +8,7 @@ export default async function AppPage({ params }: PageProps) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.aisatisfy.me';
 
   try {
-    const res = await fetch(`${apiUrl}/files/${params.id}.html`, {
+    const res = await fetch(`${apiUrl}/api/v1/content/app/${params.id}`, {
       cache: 'no-store',
     });
 

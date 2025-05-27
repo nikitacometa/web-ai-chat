@@ -7,6 +7,8 @@ import os
 import sys
 import uuid
 import logging
+import httpx
+import json
 from typing import Dict, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -27,6 +29,8 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 APPS_DIR = os.getenv("APPS_DIR", "./generated_apps")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
+DOMAIN_URL = os.getenv("DOMAIN_URL", "https://aisatisfy.me")
 
 # Validate configuration
 if not BOT_TOKEN or BOT_TOKEN == "placeholder_bot_token":
@@ -130,29 +134,45 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Generate HTML with Gemini
             html = await generate_html(state["content"], state["style"])
             
-            # Save HTML file
-            file_id = str(uuid.uuid4())[:8]
-            file_path = os.path.join(APPS_DIR, f"{file_id}.html")
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(html)
-            
-            # Send success message
-            await query.message.reply_text(
-                f"🎉 **Your app is ready!**\n\n"
-                f"File ID: `{file_id}`\n"
-                f"Location: `{file_path}`\n\n"
-                f"Style: {state['style'].split(' - ')[0]}",
-                parse_mode="Markdown"
-            )
-            
-            # Send HTML file
-            with open(file_path, 'rb') as f:
-                await query.message.reply_document(
-                    document=f,
-                    filename=f"cognicraft_{file_id}.html",
-                    caption="📎 Here's your app!"
+            # Send to backend API
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{BACKEND_URL}/api/v1/content/app",
+                    json={
+                        "content": html,
+                        "metadata": {
+                            "style": state["style"],
+                            "telegram_user": query.from_user.username or str(query.from_user.id)
+                        }
+                    }
                 )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    app_id = result["id"]
+                    app_url = result["url"]
+                    
+                    # Send success message with URL
+                    await query.message.reply_text(
+                        f"🎉 **Your app is ready!**\n\n"
+                        f"🌐 View online: {app_url}\n\n"
+                        f"Style: {state['style'].split(' - ')[0]}",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Also save locally and send as file
+                    file_path = os.path.join(APPS_DIR, f"{app_id}.html")
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(html)
+                    
+                    with open(file_path, 'rb') as f:
+                        await query.message.reply_document(
+                            document=f,
+                            filename=f"cognicraft_{app_id}.html",
+                            caption=f"📎 Your app is also available at: {app_url}"
+                        )
+                else:
+                    raise Exception(f"Backend error: {response.status_code}")
             
             # Clear user state
             del user_states[user_id]

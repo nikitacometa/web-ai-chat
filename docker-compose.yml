@@ -42,11 +42,13 @@ services:
       - MONGODB_URL=mongodb://${MONGODB_USERNAME:-admin}:${MONGODB_PASSWORD:-admin123}@mongodb:27017/${MONGODB_DB:-ai_chat_db}?authSource=admin
       - DATABASE_NAME=${MONGODB_DB:-ai_chat_db}
       - REDIS_URL=redis://redis:6379
+      - CONTENT_BASE_DIR=/app/content
     depends_on:
       - mongodb
       - redis
     volumes:
       - ./backend:/app
+      - ./content:/app/content
     networks:
       - ai_chat_network
 
@@ -100,12 +102,14 @@ services:
       - APPS_DIR=/app/generated_apps
       - RESEARCH_DIR=/app/research
       - DOMAIN_URL=${DOMAIN_URL:-https://aisatisfy.me}
+      - BACKEND_URL=http://backend:8000
     volumes:
       - ./telegram-bot/generated_apps:/app/generated_apps
       - ./telegram-bot/research:/app/research
     depends_on:
       - mongodb
       - redis
+      - backend
     networks:
       - ai_chat_network
 
