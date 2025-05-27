@@ -4,6 +4,7 @@ Focus: /createapp command only
 """
 
 import os
+import sys
 import uuid
 import logging
 from typing import Dict, Any
@@ -26,6 +27,17 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 APPS_DIR = os.getenv("APPS_DIR", "./generated_apps")
+
+# Validate configuration
+if not BOT_TOKEN or BOT_TOKEN == "placeholder_bot_token":
+    logger.error("❌ TELEGRAM_BOT_TOKEN not configured properly!")
+    logger.error("Please set a valid bot token from @BotFather in the .env file")
+    sys.exit(1)
+
+if not GEMINI_API_KEY or GEMINI_API_KEY == "placeholder_gemini_key":
+    logger.error("❌ GEMINI_API_KEY not configured properly!")
+    logger.error("Please set a valid Gemini API key from Google AI Studio in the .env file")
+    sys.exit(1)
 
 # Create apps directory
 os.makedirs(APPS_DIR, exist_ok=True)
