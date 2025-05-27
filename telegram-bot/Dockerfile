@@ -3,10 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY telegram-bot/Pipfile ./
-RUN pip install pipenv && \
-    pipenv requirements > requirements.txt && \
-    pip install -r requirements.txt
+COPY telegram-bot/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY telegram-bot/ ./
