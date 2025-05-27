@@ -7,20 +7,27 @@ services:
     container_name: ai_chat_mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "${MONGODB_PORT:-27017}:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123
-      MONGO_INITDB_DATABASE: ai_chat_db
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${MONGODB_DB:-ai_chat_db}
     volumes:
       - mongodb_data:/data/db
     networks:
       - ai_chat_network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7.2
+    container_name: ai_chat_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_chat_network
 
   # FastAPI Backend
   backend:
@@ -30,22 +37,18 @@ services:
     container_name: ai_chat_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
-      - MONGODB_URL=mongodb://admin:admin123@mongodb:27017/ai_chat_db?authSource=admin
-      - DATABASE_NAME=ai_chat_db
+      - MONGODB_URL=mongodb://${MONGODB_USERNAME:-admin}:${MONGODB_PASSWORD:-admin123}@mongodb:27017/${MONGODB_DB:-ai_chat_db}?authSource=admin
+      - DATABASE_NAME=${MONGODB_DB:-ai_chat_db}
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      mongodb:
-        condition: service_healthy
+      - mongodb
+      - redis
     volumes:
       - ./backend:/app
     networks:
       - ai_chat_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # Next.js Web UI
   web:
@@ -55,18 +58,19 @@ services:
     container_name: ai_chat_web
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000/api/v1}
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     networks:
       - ai_chat_network
 
 volumes:
   mongodb_data:
+  redis_data:
 
 networks:
   ai_chat_network:
