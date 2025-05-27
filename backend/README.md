@@ -9,6 +9,7 @@ A FastAPI backend service with MongoDB for managing user applications.
 - Two main endpoints for testing
 - Docker support
 - CORS enabled for frontend integration
+- Uses Pipenv for dependency management
 
 ## API Endpoints
 
@@ -68,20 +69,25 @@ GET /api/v1/user-apps/?telegram_id=123456789&is_active=true&limit=20
 
 ## Running Locally
 
-1. Install dependencies:
+1. Install pipenv:
 ```bash
-pip install -r requirements.txt
+pip install pipenv
 ```
 
-2. Set up environment variables:
+2. Install dependencies:
+```bash
+pipenv install
+```
+
+3. Set up environment variables:
 ```bash
 cp .env.example .env
 # Edit .env with your MongoDB connection string
 ```
 
-3. Run the server:
+4. Run the server:
 ```bash
-uvicorn app.main:app --reload
+pipenv run uvicorn app.main:app --reload
 ```
 
 ## API Documentation

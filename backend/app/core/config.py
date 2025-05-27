@@ -12,7 +12,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Chat Backend"
     
     # CORS settings
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    BACKEND_CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "http://web:3000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001"
+    ]
     
     class Config:
         env_file = ".env"

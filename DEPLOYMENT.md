@@ -3,7 +3,7 @@
 ## Quick Start with Docker Compose
 
 ### Prerequisites
-- Docker and Docker Compose installed
+- Docker and Docker Compose (v2.20+) installed
 - Git
 
 ### Steps
@@ -30,11 +30,11 @@ cp backend/.env.example backend/.env
 
 3. **Start the entire stack**
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This will start:
-- MongoDB on port 27017
+- MongoDB 8.0 on port 27017
 - FastAPI backend on port 8000
 - Next.js web UI on port 3000
 
@@ -73,13 +73,20 @@ curl "http://localhost:8000/api/v1/user-apps/?telegram_id=123456789"
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
+## Health Checks
+
+All services include health checks:
+- MongoDB: Automatically checked with `mongosh ping`
+- Backend: Health endpoint at `/health`
+- Services wait for dependencies to be healthy before starting
+
 ## Stopping the Services
 
 ```bash
-docker-compose down
+docker compose down
 
 # To also remove volumes (database data):
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Production Considerations
@@ -105,4 +112,33 @@ docker-compose down -v
    - Add logging aggregation
    - Set up health checks
    - Monitor resource usage
-   - Set up alerts 
+   - Set up alerts
+
+## Troubleshooting
+
+### Permission Errors
+If you get permission errors when cloning:
+```bash
+# Check directory ownership
+ls -la ~/apps
+
+# Clone to a directory you own
+cd ~
+mkdir -p dev
+cd dev
+git clone <your-repo-url>
+```
+
+### Dependency Conflicts
+The backend uses Pipenv to manage dependencies. If you need to update packages:
+```bash
+cd backend
+pipenv update
+```
+
+### Docker Build Issues
+If you're on an older Docker version:
+```bash
+# Use docker-compose (with hyphen) instead of docker compose
+docker-compose up -d
+``` 
