@@ -85,6 +85,30 @@ services:
     networks:
       - ai_chat_network
 
+  # Telegram Bot
+  telegram-bot:
+    build:
+      context: ./telegram-bot
+      dockerfile: Dockerfile
+    container_name: ai_chat_telegram_bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - APPS_DIR=/app/generated_apps
+      - RESEARCH_DIR=/app/research
+      - DOMAIN_URL=${DOMAIN_URL:-https://aisatisfy.me}
+    volumes:
+      - ./telegram-bot/generated_apps:/app/generated_apps
+      - ./telegram-bot/research:/app/research
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - ai_chat_network
+
 volumes:
   mongodb_data:
   redis_data:
