@@ -24,6 +24,76 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* App Types Section */}
+      <div className="container mx-auto px-4 py-16 bg-white">
+        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
+          Explore Our Apps
+        </h2>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="border rounded-lg p-6 hover:shadow-lg transition">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+              <span className="text-2xl">🔬</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Research</h3>
+            <p className="text-gray-600 mb-4">
+              AI-powered research papers and analysis
+            </p>
+            <a
+              href="/research/research_ai_agent_libraries"
+              className="text-blue-600 hover:underline"
+            >
+              View Example →
+            </a>
+          </div>
+
+          <div className="border rounded-lg p-6 hover:shadow-lg transition">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+              <span className="text-2xl">💻</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Apps</h3>
+            <p className="text-gray-600 mb-4">Interactive AI applications</p>
+            <a
+              href="/app/example_app"
+              className="text-blue-600 hover:underline"
+            >
+              Coming Soon →
+            </a>
+          </div>
+
+          <div className="border rounded-lg p-6 hover:shadow-lg transition">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+              <span className="text-2xl">🎨</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Images</h3>
+            <p className="text-gray-600 mb-4">
+              AI-generated images and visualizations
+            </p>
+            <a
+              href="/image/example_visualization"
+              className="text-blue-600 hover:underline"
+            >
+              Coming Soon →
+            </a>
+          </div>
+
+          <div className="border rounded-lg p-6 hover:shadow-lg transition">
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4">
+              <span className="text-2xl">📄</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Documents</h3>
+            <p className="text-gray-600 mb-4">
+              AI-enhanced documents and reports
+            </p>
+            <a
+              href="/doc/example_report"
+              className="text-blue-600 hover:underline"
+            >
+              Coming Soon →
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Features Section */}
       <div className="container mx-auto px-4 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 from beanie import Document, Link
 from pydantic import Field, HttpUrl
 from .user import User
@@ -11,9 +11,14 @@ class EnvironmentVariable(Document):
     description: Optional[str] = Field(None, description="Description of the variable")
 
 
+AppType = Literal["research", "app", "image", "doc"]
+
+
 class UserApp(Document):
     name: str = Field(..., description="Application name")
-    url: HttpUrl = Field(..., description="Application URL")
+    type: AppType = Field(..., description="Type of the application")
+    code: str = Field(..., description="HTML code content of the application")
+    url: Optional[HttpUrl] = Field(None, description="Application URL (auto-generated)")
     description: str = Field(..., description="Application description text")
     required_env_vars: List[List[str]] = Field(
         default_factory=list,
@@ -29,15 +34,17 @@ class UserApp(Document):
         indexes = [
             "owner",
             "created_at",
-            "is_active"
+            "is_active",
+            "type"
         ]
     
     class Config:
         json_schema_extra = {
             "example": {
-                "name": "My Weather App",
-                "url": "https://weather-app.example.com",
-                "description": "A simple weather application that shows current weather",
+                "name": "My Research App",
+                "type": "research",
+                "code": "<html><body><h1>Research Content</h1></body></html>",
+                "description": "A research application about AI agents",
                 "required_env_vars": [
                     ["API_KEY", "Your OpenWeather API key"],
                     ["LOCATION", "Default location for weather data"]

@@ -1,11 +1,15 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel, HttpUrl, Field
+
+
+AppType = Literal["research", "app", "image", "doc"]
 
 
 class UserAppCreate(BaseModel):
     name: str = Field(..., description="Application name")
-    url: HttpUrl = Field(..., description="Application URL")
+    type: AppType = Field(..., description="Type of the application")
+    code: str = Field(..., description="HTML code content")
     description: str = Field(..., description="Application description")
     required_env_vars: List[List[str]] = Field(
         default_factory=list,
@@ -16,7 +20,8 @@ class UserAppCreate(BaseModel):
 
 class UserAppUpdate(BaseModel):
     name: Optional[str] = None
-    url: Optional[HttpUrl] = None
+    type: Optional[AppType] = None
+    code: Optional[str] = None
     description: Optional[str] = None
     required_env_vars: Optional[List[List[str]]] = None
     is_active: Optional[bool] = None
@@ -25,7 +30,9 @@ class UserAppUpdate(BaseModel):
 class UserAppResponse(BaseModel):
     id: str = Field(..., alias="_id")
     name: str
-    url: HttpUrl
+    type: AppType
+    code: str
+    url: Optional[HttpUrl]
     description: str
     required_env_vars: List[List[str]]
     is_active: bool
@@ -39,5 +46,6 @@ class UserAppResponse(BaseModel):
 
 class UserAppFilter(BaseModel):
     telegram_id: Optional[str] = None
+    type: Optional[AppType] = None
     is_active: Optional[bool] = None
     name_contains: Optional[str] = None 
