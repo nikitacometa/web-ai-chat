@@ -2,22 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install pipenv
-RUN pip install pipenv
-
-# Copy Pipfile and Pipfile.lock
-COPY Pipfile Pipfile.lock ./
-
-# Install dependencies
-RUN pipenv install --system --deploy
+# Copy requirements and install dependencies
+COPY telegram-bot/Pipfile ./
+RUN pip install pipenv && \
+    pipenv requirements > requirements.txt && \
+    pip install -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY telegram-bot/ ./
 
 # Create directories for generated files
 RUN mkdir -p /app/generated_apps /app/research /app/apps

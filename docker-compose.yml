@@ -88,8 +88,8 @@ services:
   # Telegram Bot
   telegram-bot:
     build:
-      context: ./telegram-bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: telegram-bot/Dockerfile
     container_name: ai_chat_telegram_bot
     restart: unless-stopped
     environment:
