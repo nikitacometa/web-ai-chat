@@ -113,6 +113,23 @@ services:
     networks:
       - ai_chat_network
 
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ai_chat_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./content:/usr/share/nginx/html/content
+    depends_on:
+      - backend
+      - landing
+    networks:
+      - ai_chat_network
+
 volumes:
   mongodb_data:
   redis_data:
