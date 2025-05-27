@@ -6,8 +6,8 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
+COPY package.json package-lock.json* ./
+RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -15,15 +15,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set dummy environment variables for build
+# Set production environment
+ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV AUTH_SECRET=dummy_secret_for_build
-ENV XAI_API_KEY=dummy_key
-ENV BLOB_READ_WRITE_TOKEN=dummy_token
-ENV POSTGRES_URL=dummy_url
-ENV REDIS_URL=dummy_redis
 
-RUN corepack enable pnpm && pnpm run build
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

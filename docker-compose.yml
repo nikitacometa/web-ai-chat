@@ -50,7 +50,7 @@ services:
     networks:
       - ai_chat_network
 
-  # Next.js Web UI
+  # Next.js Web UI (Chat)
   web:
     build:
       context: .
@@ -63,6 +63,23 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000/api/v1}
       - REDIS_URL=redis://redis:6379
+    depends_on:
+      - backend
+    networks:
+      - ai_chat_network
+
+  # Landing Page
+  landing:
+    build:
+      context: ./landing-page
+      dockerfile: Dockerfile
+    container_name: ai_chat_landing
+    restart: unless-stopped
+    ports:
+      - "${LANDING_PORT:-3001}:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.aisatisfy.me}
     depends_on:
       - backend
     networks:
