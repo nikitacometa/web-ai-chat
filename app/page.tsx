@@ -31,7 +31,7 @@ export default function HomePage() {
         </h2>
         <div className="grid md:grid-cols-3 gap-8">
           <div className="text-center p-6">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="size-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">🤖</span>
             </div>
             <h3 className="text-xl font-semibold mb-2">Smart AI Integration</h3>
@@ -41,7 +41,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="text-center p-6">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="size-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">⚡</span>
             </div>
             <h3 className="text-xl font-semibold mb-2">Lightning Fast</h3>
@@ -51,7 +51,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="text-center p-6">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="size-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">🎨</span>
             </div>
             <h3 className="text-xl font-semibold mb-2">Customizable</h3>

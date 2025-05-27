@@ -1,14 +1,15 @@
 import { notFound } from 'next/navigation';
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function WithAppPage({ params }: PageProps) {
+  const { id } = await params;
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.aisatisfy.me';
 
   try {
-    const res = await fetch(`${apiUrl}/files/${params.id}.html`, {
+    const res = await fetch(`${apiUrl}/files/${id}.html`, {
       cache: 'no-store', // Always fetch fresh content
     });
 
@@ -31,8 +32,9 @@ export default async function WithAppPage({ params }: PageProps) {
 
 // Generate metadata for the page
 export async function generateMetadata({ params }: PageProps) {
+  const { id } = await params;
   return {
-    title: `App ${params.id} - AI Satisfy`,
-    description: `View AI-powered application ${params.id}`,
+    title: `App ${id} - AI Satisfy`,
+    description: `View AI-powered application ${id}`,
   };
 }
