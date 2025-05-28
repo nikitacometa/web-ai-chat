@@ -86,6 +86,8 @@ services:
       - backend
     networks:
       - ai_chat_network
+    env_file:
+      - .env
 
   # Telegram Bot
   telegram-bot:
